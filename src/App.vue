@@ -50,18 +50,69 @@
                     clearable
                     variant="outlined"
                   />
+                  <v-btn type="submit" color="primary" :loading="loading">Login</v-btn>
                 </v-form>
+
+                <!-- User search section -->
+                <v-divider class="my-4"></v-divider>
+                <v-card-title>User Search</v-card-title>
+                <v-btn 
+                  color="primary" 
+                  :disabled="!isAuthenticated" 
+                  :loading="searchLoading"
+                  @click="searchUsers"
+                  class="mb-4"
+                >
+                  Search Users
+                </v-btn>
+
+                <!-- User list -->
+                <v-list v-if="users.length > 0" class="mt-4">
+                  <v-list-item
+                    v-for="user in users"
+                    :key="user._links.self.href"
+                    class="mb-2"
+                  >
+                    <template v-slot:default>
+                      <v-list-item-title class="font-weight-bold">
+                        {{ user._links.self.title }}
+                      </v-list-item-title>
+                      <v-list-item-subtitle v-if="user._attributes?.mail">
+                        Email: {{ user._attributes.mail }}
+                      </v-list-item-subtitle>
+                      <v-list-item-subtitle v-if="user._attributes?.telephoneNumber">
+                        Phone: {{ Array.isArray(user._attributes.telephoneNumber) 
+                          ? user._attributes.telephoneNumber.join(', ') 
+                          : user._attributes.telephoneNumber }}
+                      </v-list-item-subtitle>
+                    </template>
+                  </v-list-item>
+                </v-list>
+
+                <v-divider class="my-4"></v-divider>
+                <v-card-title>System Users</v-card-title>
+                <v-btn 
+                  color="primary" 
+                  @click="getUsers"
+                  :loading="usersLoading"
+                  class="mb-4"
+                >
+                  Get System Users
+                </v-btn>
+
+                <div v-if="systemUsers.length > 0" class="mt-4">
+                  <div v-for="user in systemUsers" :key="user._links.self.href" class="mb-2 pa-2">
+                    <div class="text-h6">{{ user._links.self.title }}</div>
+                    <div v-if="user._attributes?.eruid" class="text-body-1">
+                      ERUID: {{ user._attributes.eruid }}
+                    </div>
+                  </div>
+                </div>
+
+                <v-divider class="my-4"></v-divider>
               </v-card-text>
               <v-card-actions>
                 <v-spacer />
-                <v-btn
-                  color="primary"
-                  @click="login"
-                  :loading="loading"
-                  size="large"
-                >
-                  Login
-                </v-btn>
               </v-card-actions>
             </v-card>
           </v-col>
@@ -146,6 +197,12 @@ export default {
   name: 'App',
   data() {
     return {
+      username: '',
+      password: '',
+      searchLoading: false,
+      users: [],
+      systemUsers: [],
+      isAuthenticated: false,
       credentials: {
         username: 'ITIM Manager',
         password: '1q@3e4r',
@@ -154,6 +211,7 @@ export default {
       },
       isimClient: null,
       loading: false,
+      usersLoading: false,
       authTokens: {
         jsessionId: null,
         ltpaToken: null
@@ -240,6 +298,36 @@ export default {
         this.showMessage(error.message, 'error');
       } finally {
         this.loading = false;
+      }
+    },
+    async searchUsers() {
+      this.searchLoading = true;
+      try {
+        const users = await this.isimClient.searchPeople({
+          attributes: ['mail', 'telephoneNumber'],
+          limit: 100,
+          sort: '+cn'
+        });
+        this.users = users;
+        this.addLog(`Found ${users.length} users`);
+      } catch (error) {
+        console.error('Search error:', error);
+        this.addLog('Search error: ' + error);
+      } finally {
+        this.searchLoading = false;
+      }
+    },
+    async getUsers() {
+      this.usersLoading = true;
+      try {
+        const users = await this.isimClient.getSystemUsers();
+        this.systemUsers = users;
+        this.addLog(`Found ${users.length} system users`);
+      } catch (error) {
+        console.error('System users error:', error);
+        this.addLog('System users error: ' + error);
+      } finally {
+        this.usersLoading = false;
       }
     },
     formatHeaders(headers) {

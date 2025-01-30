@@ -24,11 +24,11 @@ export class ISIMClient {
     }
 
     async connect() {
-        // if (!await this.checkSessionValid()) {
+         if (!await this.checkSessionValid()) {
             await this.retrieveJSessionCookie();
             await this.retrieveLTPA2Cookie();
             await this.retrieveCSRFToken();
-        // }
+         }
         return this.token;
     }
 
@@ -251,5 +251,140 @@ export class ISIMClient {
 
     getToken() {
         return this.token;
+    }
+
+    async searchPeople({ 
+        attributes = [], 
+        embedded = [], 
+        limit = 1000, 
+        sort = '', 
+        forms = false, 
+        subordinateFilter = false,
+        range = '',
+        noCache = false
+    } = {}) {
+        const searchUrl = '/itim/rest/people';
+        this.onLog('People Search', searchUrl, 'pending');
+
+        try {
+            // Build query parameters
+            const params = new URLSearchParams();
+            if (attributes.length > 0) {
+                params.append('attributes', attributes.join(','));
+            }
+            if (embedded.length > 0) {
+                params.append('embedded', embedded.join(','));
+            }
+            if (limit) {
+                params.append('limit', limit.toString());
+            }
+            if (sort) {
+                params.append('sort', sort);
+            }
+            if (forms) {
+                params.append('forms', 'true');
+            }
+            if (subordinateFilter) {
+                params.append('subordinateFilter', 'true');
+            }
+
+            // Build headers
+            const headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; ')
+            };
+
+            if (noCache) {
+                headers['Cache-Control'] = 'no-cache';
+            }
+            if (range) {
+                headers['Range'] = `items=${range}`;
+            }
+
+            const url = `${searchUrl}${params.toString() ? '?' + params.toString() : ''}`;
+            console.log('Searching people with URL:', url);
+            console.log('Using headers:', headers);
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers,
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('People search response:', data);
+
+            this.onLog('People Search', searchUrl, 'success', JSON.stringify({
+                url,
+                resultCount: Array.isArray(data) ? data.length : 0,
+                params: Object.fromEntries(params.entries())
+            }));
+
+            return data;
+
+        } catch (error) {
+            this.onLog('People Search', searchUrl, 'error', JSON.stringify({
+                error: error.message,
+                cookies: {
+                    jsession: this.token.jsession,
+                    ltpa2: this.token.ltpa2
+                }
+            }));
+            throw new Error(`Failed to search people: ${error.message}`);
+        }
+    }
+
+    async getSystemUsers() {
+        const url = '/itim/rest/systemusers?attributes=eruid';
+        this.onLog('System Users', url, 'pending');
+        
+        try {
+            // Ensure we have both cookies
+            if (!this.token.jsession || !this.token.ltpa2) {
+                throw new Error('Missing required authentication tokens');
+            }
+
+            const cookieHeader = [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; ');
+            console.log('Using cookie header:', cookieHeader);
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*',
+                    'Content-Type': 'application/json',
+                    'Cookie': cookieHeader,
+                    'Cache-Control': 'no-cache'
+                },
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('System users response:', data);
+            
+            this.onLog('System Users', url, 'success', JSON.stringify({
+                resultCount: Array.isArray(data) ? data.length : 0
+            }));
+
+            return data;
+
+        } catch (error) {
+            this.onLog('System Users', url, 'error', JSON.stringify({
+                error: error.message,
+                cookies: {
+                    jsession: this.token.jsession,
+                    ltpa2: this.token.ltpa2
+                }
+            }));
+            throw new Error(`Failed to get system users: ${error.message}`);
+        }
     }
 }
