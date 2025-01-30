@@ -55,7 +55,33 @@ export default defineConfig({
             }
           });
         }
-      }
+      },
+      '/itim/rest/systemusers': {
+        target: 'http://192.168.1.204:9080',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('Proxying system users request:', req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('System users response headers:', proxyRes.headers);
+          });
+        }
+      },
+      '/itim/rest/people': {
+        target: 'http://192.168.1.204:9080',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('Proxying people request:', req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('People response headers:', proxyRes.headers);
+          });
+        }
+      },
     }
   }
 })

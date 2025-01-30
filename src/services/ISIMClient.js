@@ -387,4 +387,61 @@ export class ISIMClient {
             throw new Error(`Failed to get system users: ${error.message}`);
         }
     }
+
+    async getPeople({ attributes = [] } = {}) {
+        const url = '/itim/rest/people';
+        const params = new URLSearchParams();
+        
+        // Add attributes if specified
+        if (attributes.length > 0) {
+            params.append('attributes', attributes.join(','));
+        }
+
+        const finalUrl = `${url}${params.toString() ? '?' + params.toString() : ''}`;
+        this.onLog('People', finalUrl, 'pending');
+        
+        try {
+            // Ensure we have both cookies
+            if (!this.token.jsession || !this.token.ltpa2) {
+                throw new Error('Missing required authentication tokens');
+            }
+
+            const cookieHeader = [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; ');
+            console.log('Using cookie header:', cookieHeader);
+
+            const response = await fetch(finalUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json, text/plain, */*',
+                    'Content-Type': 'application/json',
+                    'Cookie': cookieHeader,
+                    'Cache-Control': 'no-cache'
+                },
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('People response:', data);
+            
+            this.onLog('People', finalUrl, 'success', JSON.stringify({
+                resultCount: Array.isArray(data) ? data.length : 0
+            }));
+
+            return data;
+
+        } catch (error) {
+            this.onLog('People', finalUrl, 'error', JSON.stringify({
+                error: error.message,
+                cookies: {
+                    jsession: this.token.jsession,
+                    ltpa2: this.token.ltpa2
+                }
+            }));
+            throw new Error(`Failed to get people: ${error.message}`);
+        }
+    }
 }
