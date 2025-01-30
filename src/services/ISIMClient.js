@@ -108,57 +108,30 @@ export class ISIMClient {
                     'Cache-Control': 'no-cache'
                 },
                 body: formData.toString(),
-                credentials: 'include'
+                credentials: 'include',
+                mode: 'no-cors'
             });
-            console.log('RESPONSE!!!!', response);
-            // Get all headers for debugging
-            const allHeaders = Object.fromEntries(response.headers.entries());
-            console.log('All response headers:', allHeaders);
-
-            // Specifically log Set-Cookie header
-            const setCookieHeader = response.headers.get('set-cookie');
-            console.log('Set-Cookie header:', setCookieHeader);
-
-            // Read the cookie count
-            const cookieCount = parseInt(response.headers.get('x-auth-cookie-count') || '0');
-            console.log('Cookie count:', cookieCount);
-
-            // Read all cookies
-            const cookies = [];
-            for (let i = 0; i < cookieCount; i++) {
-                const cookie = response.headers.get(`x-auth-cookie-${i}`);
-                if (cookie) {
-                    cookies.push(cookie);
-                    console.log(`Cookie ${i}:`, cookie);
-                }
-            }
-
-            const jsessionCookie = cookies.find(cookie => cookie.startsWith('JSESSIONID='));
-            if (jsessionCookie) {
-                console.log('Found JSESSIONID in response:', jsessionCookie);
-            }
-
-            // Find LtpaToken2 cookie and extract value up to semicolon
+            
+            console.log('RESPONSE!!!!!!!', response);
+            
+            // Wait a bit for cookies to be set
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Get all cookies
+            const cookies = document.cookie.split(';').map(cookie => cookie.trim());
+            console.log('All cookies after auth:', cookies);
+            
+            // Look for LTPA token in cookies
             const ltpaCookie = cookies.find(cookie => cookie.startsWith('LtpaToken2='));
             if (ltpaCookie) {
-                const match = ltpaCookie.match(/LtpaToken2=([^;]+)/);
-                if (match) {
-                    this.token.ltpa2 = `LtpaToken2=${match[1]}`;
-                    console.log('Found LtpaToken2 cookie:', this.token.ltpa2);
-                }
+                this.token.ltpa2 = ltpaCookie;
+                console.log('Found LtpaToken2 cookie:', ltpaCookie);
+                this.onLog('Authentication', authUrl, 'success', JSON.stringify({ cookie: ltpaCookie }));
+                return true;
             }
 
-            const responseDetails = {
-                status: response.status,
-                statusText: response.statusText,
-                headers: {
-                    'cookies': cookies,
-                    'all-headers': allHeaders
-                }
-            };
-            
-            this.onLog('Authentication', authUrl, 'success',
-                JSON.stringify(responseDetails, null, 2));
+            this.onLog('Authentication', authUrl, 'warning', 'No LTPA token found in cookies');
+            return false;
 
         } catch (error) {
             this.onLog('Authentication', authUrl, 'error', error.message);
@@ -167,69 +140,39 @@ export class ISIMClient {
     }
 
     async retrieveCSRFToken() {
+        console.log('Retrieving CSRF token...');
         const csrfUrl = '/itim/rest/systemusers/me';
         this.onLog('CSRF Token Request', csrfUrl, 'pending');
         
         try {
-            // Combine both cookies in the header
-            const cookieHeader = `${this.token.ltpa2};${this.token.jsession}`;
-            console.log('Using cookie header:', cookieHeader);
-
             const response = await fetch(csrfUrl, {
                 method: 'GET',
                 headers: {
-                    'Accept': 'application/json',
-                    'Cookie': cookieHeader,
-                    'Cache-Control': 'no-cache'
+                    'Cookie': `${this.token.jsession}; ${this.token.ltpa2}`,
+                    'Accept': 'application/json'
                 },
                 credentials: 'include'
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to get CSRF token: ${response.status} ${response.statusText}`);
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-
-            // Log full response details
-            console.log('CSRF Response Details:', {
-                status: response.status,
-                statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries())
-            });
 
             const data = await response.json();
-            console.log('CSRF Response Data:', data);
-
-            // Extract CSRF token from response headers
-            const csrfToken = response.headers.get('X-CSRF-Token') || 
-                            response.headers.get('x-csrf-token');
-
-            if (csrfToken) {
-                this.token.csrf = csrfToken;
-                console.log('Found CSRF token:', csrfToken);
-            } else {
-                console.warn('No CSRF token found in response headers');
+            console.log('CSRF Response:', data);
+            
+            if (data && data.csrf) {
+                this.token.csrf = data.csrf;
+                this.onLog('CSRF Token Request', csrfUrl, 'success', JSON.stringify({ csrf: data.csrf }));
+                return true;
             }
 
-            const responseDetails = {
-                status: response.status,
-                statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries()),
-                data: data,
-                csrfToken: csrfToken,
-                cookieHeader: cookieHeader
-            };
-
-            this.onLog('CSRF Token Request', csrfUrl, 'success',
-                JSON.stringify(responseDetails, null, 2));
-
-            // Store user details from response
-            if (data) {
-                this.token.user = data;
-            }
+            this.onLog('CSRF Token Request', csrfUrl, 'warning', 'No CSRF token in response');
+            return false;
 
         } catch (error) {
             this.onLog('CSRF Token Request', csrfUrl, 'error', error.message);
-            throw new Error("Failed to retrieve CSRF token: " + error.message);
+            throw new Error("Failed to get CSRF token: " + error.message);
         }
     }
 
