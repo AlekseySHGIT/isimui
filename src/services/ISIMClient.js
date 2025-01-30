@@ -115,27 +115,40 @@ export class ISIMClient {
             console.log('RESPONSE!!!!!!!', response);
             
             // Wait a bit for cookies to be set
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
             // Get all cookies
             const cookies = document.cookie.split(';').map(cookie => cookie.trim());
             console.log('All cookies after auth:', cookies);
             
-            // Look for LTPA token in cookies
-            const ltpaCookie = cookies.find(cookie => cookie.startsWith('LtpaToken2='));
-            if (ltpaCookie) {
-                this.token.ltpa2 = ltpaCookie;
-                console.log('Found LtpaToken2 cookie:', ltpaCookie);
-                this.onLog('Authentication', authUrl, 'success', JSON.stringify({ cookie: ltpaCookie }));
+            // Look for client and clerk cookies from the response
+            const clientCookie = cookies.find(cookie => cookie.includes('_client_wat'));
+            const clerkCookie = cookies.find(cookie => cookie.includes('_clerk_db_jwt'));
+            
+            if (clientCookie || clerkCookie) {
+                // Store these as our LTPA token equivalent
+                this.token.ltpa2 = [clientCookie, clerkCookie].filter(Boolean).join('; ');
+                console.log('Found auth cookies:', this.token.ltpa2);
+                this.onLog('Authentication', authUrl, 'success', JSON.stringify({ 
+                    cookies: {
+                        client: clientCookie,
+                        clerk: clerkCookie
+                    }
+                }));
                 return true;
             }
 
-            this.onLog('Authentication', authUrl, 'warning', 'No LTPA token found in cookies');
+            this.onLog('Authentication', authUrl, 'warning', JSON.stringify({ 
+                message: 'No auth cookies found',
+                availableCookies: cookies 
+            }));
             return false;
 
         } catch (error) {
-            this.onLog('Authentication', authUrl, 'error', error.message);
-            throw new Error("Failed to retrieve LTPA2 cookie: " + error.message);
+            this.onLog('Authentication', authUrl, 'error', JSON.stringify({ 
+                error: error.message 
+            }));
+            throw new Error("Failed to retrieve auth cookies: " + error.message);
         }
     }
 
@@ -145,11 +158,19 @@ export class ISIMClient {
         this.onLog('CSRF Token Request', csrfUrl, 'pending');
         
         try {
+            // Construct cookie header from all available tokens
+            const cookieHeader = [this.token.jsession, this.token.ltpa2]
+                .filter(Boolean)
+                .join('; ');
+            
+            console.log('Using cookie header:', cookieHeader);
+
             const response = await fetch(csrfUrl, {
                 method: 'GET',
                 headers: {
-                    'Cookie': `${this.token.jsession}; ${this.token.ltpa2}`,
-                    'Accept': 'application/json'
+                    'Cookie': cookieHeader,
+                    'Accept': 'application/json, text/plain, */*',
+                    'Content-Type': 'application/json'
                 },
                 credentials: 'include'
             });
@@ -167,11 +188,20 @@ export class ISIMClient {
                 return true;
             }
 
-            this.onLog('CSRF Token Request', csrfUrl, 'warning', 'No CSRF token in response');
+            this.onLog('CSRF Token Request', csrfUrl, 'warning', JSON.stringify({
+                message: 'No CSRF token in response',
+                responseData: data
+            }));
             return false;
 
         } catch (error) {
-            this.onLog('CSRF Token Request', csrfUrl, 'error', error.message);
+            this.onLog('CSRF Token Request', csrfUrl, 'error', JSON.stringify({
+                error: error.message,
+                cookies: {
+                    jsession: this.token.jsession,
+                    ltpa2: this.token.ltpa2
+                }
+            }));
             throw new Error("Failed to get CSRF token: " + error.message);
         }
     }
