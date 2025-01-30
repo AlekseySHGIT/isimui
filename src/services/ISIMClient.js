@@ -444,4 +444,14 @@ export class ISIMClient {
             throw new Error(`Failed to get people: ${error.message}`);
         }
     }
+
+    async getPersonAccounts(personId) {
+        const response = await this.fetchWithAuth(`/itim/rest/people/${personId}/accounts`, {
+          params: {
+            attributes: 'owner,eraccountstatus,eruid,eraccountownershiptype',
+            embedded: 'erservice.erservicename'
+          }
+        });
+        return await response.json();
+      }
 }

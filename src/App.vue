@@ -91,26 +91,49 @@
 
                 <v-divider class="my-4"></v-divider>
                 <v-card-title class="d-flex flex-wrap align-center gap-4">
-                  <div class="d-flex align-center gap-4">
-                    <span class="text-h5">People</span>
-                    <v-btn 
-                      color="primary" 
-                      @click="getPeople"
-                      :loading="peopleLoading"
-                    >
-                      Get People
-                    </v-btn>
+                  <div class="d-flex flex-column">
+                    <div class="d-flex align-center gap-4 mb-2">
+                      <span class="text-h5">People</span>
+                      <v-btn 
+                        color="primary" 
+                        @click="getPeople"
+                        :loading="peopleLoading"
+                        :disabled="peopleLoading"
+                      >
+                        Get People
+                      </v-btn>
+                    </div>
+                    
+                    <!-- Loading Progress -->
+                    <div v-if="peopleLoading" class="progress-container" style="width: 300px">
+                      <div class="d-flex justify-space-between align-center mb-1">
+                        <span class="text-body-2">
+                          <v-icon size="small" color="primary" class="mr-1">mdi-account-group</v-icon>
+                          {{ loadingStatus }}
+                        </span>
+                        <span class="text-body-2 font-weight-medium">{{ progress }}%</span>
+                      </div>
+                      <v-progress-linear
+                        color="primary"
+                        :model-value="progress"
+                        height="8"
+                        rounded
+                        striped
+                      ></v-progress-linear>
+                    </div>
                   </div>
 
                   <v-spacer></v-spacer>
 
                   <v-text-field
                     v-model="search"
-                    label="Search"
+                    label="Search People"
                     prepend-icon="mdi-magnify"
                     single-line
                     hide-details
                     style="max-width: 300px"
+                    @input="handleSearch"
+                    :disabled="peopleLoading"
                   ></v-text-field>
 
                   <v-dialog v-model="attributeDialog" max-width="500px">
@@ -156,35 +179,161 @@
                   </v-dialog>
                 </v-card-title>
 
+                <!-- Data Table -->
                 <v-data-table
-                  v-if="people.length > 0"
+                  v-model:expanded="expanded"
                   :headers="peopleHeaders"
                   :items="filteredPeople"
-                  :items-per-page="25"
-                  :search="search"
-                  class="mt-4"
-                  style="width: 100%; min-width: 1800px"
-                  density="comfortable"
+                  :loading="peopleLoading"
+                  :items-per-page="10"
+                  class="elevation-1"
+                  item-value="id"
                 >
-                  <template v-slot:item.name="{ item }">
-                    <div style="min-width: 300px; white-space: normal">{{ item._links.self.title }}</div>
-                  </template>
-                  <template v-for="attr in selectedAttributes" :key="attr" v-slot:[`item.${attr}`]="{ item }">
-                    <div style="min-width: 300px; white-space: normal">{{ item._attributes?.[attr] }}</div>
-                  </template>
-                  <template v-slot:item.actions="{ item }">
-                    <div style="min-width: 150px">
-                      <v-btn
-                        size="small"
-                        color="primary"
-                        variant="text"
-                        :href="item._links.self.href"
-                        target="_blank"
-                        class="mr-2"
-                      >
-                        Details
-                      </v-btn>
+                  <!-- ID Column -->
+                  <template v-slot:item.id="{ item }">
+                    <div class="d-flex align-center">
+                      <v-icon size="small" class="mr-2">mdi-magnify</v-icon>
+                      {{ item.id }}
                     </div>
+                  </template>
+
+                  <!-- Name Column -->
+                  <template v-slot:item.name="{ item }">
+                    <div class="d-flex align-center">
+                      <v-avatar size="32" color="primary" class="mr-2">
+                        <span class="text-white">{{ getInitials(item.name) }}</span>
+                      </v-avatar>
+                      <div>
+                        <div class="font-weight-medium">{{ item.name }}</div>
+                        <div class="text-caption text-medium-emphasis">{{ item.attributes?.mail }}</div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- Status Column -->
+                  <template v-slot:item.status="{ item }">
+                    <v-chip
+                      :color="getStatusColor(item.status)"
+                      :text="item.status"
+                      size="small"
+                    ></v-chip>
+                  </template>
+
+                  <!-- Actions Column -->
+                  <template v-slot:item.actions="{ item }">
+                    <div class="d-flex align-center gap-2">
+                      <v-tooltip text="View Details" location="top">
+                        <template v-slot:activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon="mdi-eye"
+                            size="small"
+                            variant="text"
+                            color="primary"
+                          ></v-btn>
+                        </template>
+                      </v-tooltip>
+
+                      <v-tooltip text="Edit User" location="top">
+                        <template v-slot:activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon="mdi-pencil"
+                            size="small"
+                            variant="text"
+                            color="primary"
+                          ></v-btn>
+                        </template>
+                      </v-tooltip>
+
+                      <v-menu>
+                        <template v-slot:activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon="mdi-dots-vertical"
+                            size="small"
+                            variant="text"
+                          ></v-btn>
+                        </template>
+                        <v-list>
+                          <v-list-item
+                            v-for="action in ['Reset Password', 'Suspend', 'Enable']"
+                            :key="action"
+                            :value="action"
+                          >
+                            <v-list-item-title>{{ action }}</v-list-item-title>
+                          </v-list-item>
+                        </v-list>
+                      </v-menu>
+                    </div>
+                  </template>
+
+                  <!-- Expanded Content - Accounts -->
+                  <template v-slot:expanded-row="{ columns, item }">
+                    <tr>
+                      <td :colspan="columns.length">
+                        <v-card flat class="ma-2">
+                          <v-card-title class="text-subtitle-1">
+                            <v-icon start color="primary">mdi-account-multiple</v-icon>
+                            Connected Accounts
+                          </v-card-title>
+                          <v-card-text>
+                            <v-table density="comfortable">
+                              <thead>
+                                <tr>
+                                  <th>Account Type</th>
+                                  <th>Username</th>
+                                  <th>Domain</th>
+                                  <th>Status</th>
+                                  <th>Last Login</th>
+                                  <th>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr v-if="item.accounts && item.accounts.length === 0">
+                                  <td colspan="6" class="text-center">No accounts found</td>
+                                </tr>
+                                <tr v-else-if="!item.accounts">
+                                  <td colspan="6" class="text-center">
+                                    <v-progress-circular indeterminate size="20" width="2" color="primary"></v-progress-circular>
+                                    Loading accounts...
+                                  </td>
+                                </tr>
+                                <tr v-for="account in item.accounts || []" :key="account.id">
+                                  <td>
+                                    <div class="d-flex align-center">
+                                      <v-icon size="small" class="mr-2" :color="getAccountTypeColor(account.type)">
+                                        {{ getAccountTypeIcon(account.type) }}
+                                      </v-icon>
+                                      {{ account.type }}
+                                    </div>
+                                  </td>
+                                  <td>{{ account.username }}</td>
+                                  <td>{{ account.domain }}</td>
+                                  <td>
+                                    <v-chip
+                                      :color="getStatusColor(account.status)"
+                                      :text="account.status"
+                                      size="x-small"
+                                    ></v-chip>
+                                  </td>
+                                  <td>{{ formatDate(account.lastLogin) }}</td>
+                                  <td>
+                                    <v-btn
+                                      size="x-small"
+                                      color="primary"
+                                      variant="text"
+                                    >
+                                      Details
+                                    </v-btn>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </v-table>
+                          </v-card-text>
+                        </v-card>
+                      </td>
+                    </tr>
                   </template>
                 </v-data-table>
 
@@ -346,12 +495,26 @@ export default {
   name: 'App',
   data() {
     return {
+      search: '',
+      filterDepartment: 'All',
+      filterStatus: 'All',
+      expanded: [],
+      peopleLoading: false,
+      people: [],
+      filteredPeople: [],
+      discoveredAttributes: new Set(),
+      selectedAttributes: ['mail', 'telephoneNumber', 'cn', 'audio'],
+      snackbar: {
+        show: false,
+        message: '',
+        color: 'success'
+      },
+      logs: [],
       username: '',
       password: '',
       searchLoading: false,
       users: [],
       systemUsers: [],
-      people: [],
       isAuthenticated: false,
       credentials: {
         username: 'ITIM Manager',
@@ -368,78 +531,63 @@ export default {
       currentPage: 1,
       itemsPerPage: 10,
       totalItems: 0,
-      selectedAttributes: ['mail', 'telephoneNumber', 'cn'],
-      availableAttributes: [
-        'mail',
-        'telephoneNumber',
-        'cn',
-        'sn',
-        'givenName',
-        'employeeNumber',
-        'department',
-        'title',
-        'manager',
-        'location'
-      ],
-      search: '',
       attributeDialog: false,
       isimClient: null,
       loading: false,
       usersLoading: false,
-      peopleLoading: false,
       authTokens: {
         jsessionId: null,
         ltpaToken: null
-      },
-      snackbar: {
-        show: false,
-        message: '',
-        color: 'success'
-      },
-      logs: []
+      }
     }
   },
   computed: {
+    availableAttributes() {
+      return Array.from(this.discoveredAttributes).sort();
+    },
     peopleHeaders() {
       const headers = [
+        { title: 'ID', key: 'id', align: 'start', sortable: true, width: '100px' },
         { title: 'Name', key: 'name', align: 'start', sortable: true, width: '300px' }
       ];
       
       // Add headers for selected attributes
       this.selectedAttributes.forEach(attr => {
         headers.push({
-          title: attr.charAt(0).toUpperCase() + attr.slice(1),
-          key: attr,
+          title: this.formatAttributeName(attr),
+          key: `attributes.${attr}`,
           align: 'start',
           sortable: true,
-          width: '300px'
+          width: '200px'
         });
       });
       
-      headers.push({ 
-        title: 'Actions', 
-        key: 'actions', 
-        align: 'end', 
-        sortable: false,
-        width: '150px'
-      });
+      headers.push(
+        { title: 'Status', key: 'status', align: 'start', sortable: true, width: '150px' },
+        { title: 'Actions', key: 'actions', align: 'end', sortable: false, width: '150px' }
+      );
+      
       return headers;
-    },
-    filteredPeople() {
-      if (!this.search) return this.people;
-      
-      const searchLower = this.search.toLowerCase();
-      return this.people.filter(person => {
-        // Search in name
-        if (person._links.self.title.toLowerCase().includes(searchLower)) return true;
-        
-        // Search in attributes
-        return this.selectedAttributes.some(attr => {
-          const value = person._attributes?.[attr];
-          if (!value) return false;
-          return String(value).toLowerCase().includes(searchLower);
-        });
-      });
+    }
+  },
+  watch: {
+    expanded: {
+      async handler(newVal) {
+        if (newVal.length > 0) {
+          const expandedUser = this.filteredPeople.find(p => p.id === newVal[0]);
+          if (expandedUser && !expandedUser.accounts) {
+            try {
+              const accounts = await this.isimClient.getPersonAccounts(expandedUser.id);
+              this.$set(expandedUser, 'accounts', accounts);
+            } catch (error) {
+              console.error('Error loading accounts:', error);
+              this.showMessage('Failed to load user accounts', 'error');
+              this.$set(expandedUser, 'accounts', []);
+            }
+          }
+        }
+      },
+      immediate: true
     }
   },
   methods: {
@@ -539,16 +687,54 @@ export default {
       this.peopleLoading = true;
       try {
         const data = await this.isimClient.getPeople({
-          page: this.currentPage - 1,
-          itemsPerPage: this.itemsPerPage,
-          attributes: this.selectedAttributes
+          attributes: ['*', 'audio', 'mail', 'telephoneNumber', 'cn']  // Explicitly request these attributes
         });
-        this.people = data;
-        this.totalItems = data.length; // This should ideally come from response headers
-        this.addLog(`Found ${data.length} people on page ${this.currentPage}`);
+        
+        // Transform the data to flatten attributes
+        const transformedData = data.map(person => ({
+          ...person,
+          attributes: person._attributes || {},  // Move attributes to top level
+          id: person.id,
+          name: person._links.self.title,
+          status: person._attributes?.status || 'Active'
+        }));
+
+        console.log('Transformed data:', transformedData);
+        transformedData.forEach(person => {
+          if (person.name === 'Авдонин') {
+            console.log('Авдонин transformed:', person);
+          }
+        });
+
+        this.people = transformedData;
+        this.filteredPeople = transformedData;
+
+        // Discover available attributes
+        this.discoveredAttributes.clear();
+        this.people.forEach(person => {
+          if (person.attributes) {
+            Object.keys(person.attributes).forEach(attr => {
+              if (person.attributes[attr] !== null && person.attributes[attr] !== undefined) {
+                this.discoveredAttributes.add(attr);
+              }
+            });
+          }
+        });
+
+        // Set required attributes
+        const requiredAttributes = ['mail', 'telephoneNumber', 'cn', 'audio'];
+        this.selectedAttributes = requiredAttributes.filter(attr => 
+          this.discoveredAttributes.has(attr)
+        );
+
+        console.log('Selected attributes:', this.selectedAttributes);
+        console.log('Discovered attributes:', Array.from(this.discoveredAttributes));
+
+        this.addLog(`Found ${data.length} people with ${this.discoveredAttributes.size} attributes`);
       } catch (error) {
         console.error('People search error:', error);
         this.addLog('People search error: ' + error);
+        this.showMessage('Failed to load people data', 'error');
       } finally {
         this.peopleLoading = false;
       }
@@ -575,7 +761,7 @@ export default {
       try {
         // Try to parse and format as JSON
         const parsed = JSON.parse(body);
-        
+
         return JSON.stringify(parsed, null, 2);
       } catch {
         // If not JSON, return as is
@@ -583,15 +769,102 @@ export default {
       }
     },
     formatAttributeName(attr) {
+      // Handle special cases
+      const specialCases = {
+        'cn': 'Common Name',
+        'sn': 'Surname',
+        'eruid': 'ERUID',
+        'uid': 'User ID'
+      };
+
+      if (specialCases[attr]) {
+        return specialCases[attr];
+      }
+
+      // Handle regular cases
       return attr
         .split(/(?=[A-Z])|_/)
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
         .join(' ');
     },
+    handleSearch() {
+      if (!this.search) {
+        this.filteredPeople = this.people;
+        return;
+      }
+
+      const searchLower = this.search.toLowerCase();
+      this.filteredPeople = this.people.filter(person => {
+        // Search in name
+        if (person.name.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+
+        // Search in all attributes
+        if (person.attributes) {
+          return Object.entries(person.attributes).some(([key, value]) => {
+            if (value === null || value === undefined) return false;
+
+            // Handle array values
+            if (Array.isArray(value)) {
+              return value.some(v => String(v).toLowerCase().includes(searchLower));
+            }
+
+            // Handle single values
+            return String(value).toLowerCase().includes(searchLower);
+          });
+        }
+
+        return false;
+      });
+
+      console.log(`Search "${this.search}" found ${this.filteredPeople.length} results`);
+    },
     showMessage(message, color = 'success') {
       this.snackbar.message = message;
       this.snackbar.color = color;
       this.snackbar.show = true;
+    },
+    beforeDestroy() {
+      if (this.loadingInterval) {
+        clearInterval(this.loadingInterval);
+      }
+    },
+    getInitials(name) {
+      return name.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
+    },
+    getStatusColor(status) {
+      switch (status) {
+        case 'active':
+          return 'success';
+        case 'inactive':
+          return 'error';
+        default:
+          return 'info';
+      }
+    },
+    getAccountTypeColor(type) {
+      switch (type) {
+        case 'email':
+          return 'primary';
+        case 'ldap':
+          return 'info';
+        default:
+          return 'warning';
+      }
+    },
+    getAccountTypeIcon(type) {
+      switch (type) {
+        case 'email':
+          return 'mdi-email';
+        case 'ldap':
+          return 'mdi-account';
+        default:
+          return 'mdi-help-circle';
+      }
+    },
+    formatDate(date) {
+      return new Date(date).toLocaleString();
     }
   }
 }
