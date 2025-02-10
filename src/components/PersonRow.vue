@@ -124,6 +124,10 @@ const props = defineProps({
   selectedAccountAttributes: {
     type: Array,
     default: () => ['eruid', 'adisplayname', 'adescription', 'erservice', 'eraccountstatus', 'erlastaccessdate']
+  },
+  services: {
+    type: Object,
+    required: true
   }
 })
 
@@ -135,6 +139,22 @@ function extractPersonId(href) {
   if (!href) return null;
   const match = href.match(/\/people\/([^/]+)(?:\/|$)/);
   return match ? match[1] : null;
+}
+
+function getServiceName(erservice) {
+  if (!erservice) return '-';
+  
+  // Extract service ID from DN format like:
+  // erglobalid=00000000000000000002,ou=services,erglobalid=00000000000000000000,ou=cbrf,dc=com
+  const match = erservice.match(/erglobalid=([^,]+)/);
+  const serviceId = match ? match[1] : null;
+  
+  if (serviceId && props.services[serviceId]) {
+    const serviceAttrs = props.services[serviceId];
+    return serviceAttrs.erservicename || serviceAttrs.description || erservice;
+  }
+  
+  return erservice;
 }
 
 async function loadAccounts() {
@@ -153,7 +173,6 @@ async function loadAccounts() {
     const response = await isimClient.getPersonAccounts(personId);
     console.log('Raw accounts response:', response);
     
-    // Check if response has _embedded.accounts
     if (response._embedded?.accounts) {
       accounts.value = response._embedded.accounts;
     } else if (Array.isArray(response)) {
@@ -170,6 +189,22 @@ async function loadAccounts() {
     loading.value = false;
   }
 }
+
+const formattedAccounts = computed(() => {
+  if (!accounts.value) return [];
+  return accounts.value.map(account => {
+    console.log('Processing account:', account);
+    const formatted = {};
+    props.selectedAccountAttributes.forEach(attr => {
+      if (attr === 'erservice') {
+        formatted[attr] = getServiceName(account._attributes?.erservice);
+      } else {
+        formatted[attr] = account._attributes?.[attr] || '';
+      }
+    });
+    return formatted;
+  });
+});
 
 function getAccountAttributeTitle(attr) {
   const titles = {
@@ -196,18 +231,6 @@ function getColumnWidth(key) {
   }
   return widths[key] || 'auto'
 }
-
-const formattedAccounts = computed(() => {
-  if (!accounts.value) return [];
-  return accounts.value.map(account => {
-    console.log('Processing account:', account);
-    const formatted = {};
-    props.selectedAccountAttributes.forEach(attr => {
-      formatted[attr] = account._attributes?.[attr] || '';
-    });
-    return formatted;
-  });
-});
 
 function formatDate(dateString) {
   if (!dateString) return '-';

@@ -461,6 +461,74 @@ export class ISIMClient {
         }
     }
 
+    async getAllServicesWithNames() {
+        try {
+            // First, get list of all services
+            const services = await this.getServices();
+            const serviceMap = {};
+
+            // Extract service IDs from hrefs and fetch details
+            const servicePromises = services.map(async service => {
+                const href = service._links?.self?.href;
+                if (!href) return;
+                
+                // Extract ID after /services/
+                const match = href.match(/\/services\/([^/]+)/);
+                if (!match) return;
+                
+                const serviceId = match[1];
+                const details = await this.getServiceDetails(serviceId);
+                if (details?._attributes) {
+                    serviceMap[serviceId] = details._attributes;
+                }
+            });
+
+            await Promise.all(servicePromises);
+            console.log('Service map:', serviceMap);
+            return serviceMap;
+        } catch (error) {
+            console.error('Error fetching service names:', error);
+            return {};
+        }
+    }
+
+    async getServiceDetails(serviceId) {
+        // Get all attributes by using * in the query
+        const url = `/rest/services/${serviceId}?attributes=*`;
+        this.onLog('Service Details', url, 'pending');
+        
+        try {
+            const response = await this.makeRequest(url, {
+                rawPath: true,
+                method: 'GET'
+            });
+            
+            this.onLog('Service Details', url, 'success');
+            return response;
+        } catch (error) {
+            this.onLog('Service Details', url, 'error', error);
+            return null;
+        }
+    }
+
+    async getServices() {
+        const url = '/rest/services';
+        this.onLog('Services', url, 'pending');
+        
+        try {
+            const response = await this.makeRequest(url, {
+                rawPath: true,
+                method: 'GET'
+            });
+            
+            this.onLog('Services', url, 'success');
+            return response._embedded?.services || [];
+        } catch (error) {
+            this.onLog('Services', url, 'error', error);
+            return [];
+        }
+    }
+
 }
 
 // Get stored credentials if they exist

@@ -198,6 +198,7 @@
                   :person="item"
                   :headers="headers"
                   :selected-account-attributes="selectedAccountAttributes"
+                  :services="services"
                 />
               </template>
             </v-data-table>
@@ -229,6 +230,7 @@ const userAccounts = ref({})
 const loadingAccounts = ref({})
 const showColumnsMenu = ref(false)
 const showAccountColumnsMenu = ref(false)
+const services = ref({})
 
 // Define all possible attributes with Russian titles
 const allAttributes = [
@@ -461,13 +463,27 @@ function getFakeAccounts(person) {
   ]
 }
 
-async function loadPeople() {
-  if (loading.value) return;
-  
-  loading.value = true;
+async function loadServices() {
   try {
     const isimClient = AuthService.getISIMClient();
-    if (!isimClient) throw new Error('Not authenticated');
+    const serviceMap = await isimClient.getAllServicesWithNames();
+    services.value = serviceMap;
+    console.log('Loaded service map:', serviceMap);
+  } catch (error) {
+    console.error('Failed to load services:', error);
+  }
+}
+
+async function loadPeople() {
+  if (loading.value) return;
+
+  try {
+    loading.value = true;
+    const isimClient = AuthService.getISIMClient();
+    if (!isimClient) {
+      router.push('/login');
+      return;
+    }
 
     const response = await isimClient.getPeople();
     
@@ -510,6 +526,7 @@ onMounted(async () => {
   }
   
   await getCurrentUser()
+  await loadServices()
   await loadPeople()
 })
 </script>
