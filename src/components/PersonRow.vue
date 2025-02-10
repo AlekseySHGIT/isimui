@@ -34,7 +34,7 @@
             variant="outlined"
             color="primary"
           >
-            {{ extractPersonId(person._links?.self?.href) }}
+            {{ extractPersonId(props.person._links?.self?.href) }}
           </v-chip>
         </v-card-title>
         <div v-if="loading" class="d-flex justify-center pa-4">
@@ -110,14 +110,14 @@ const accounts = ref(null)
 
 function extractPersonId(href) {
   if (!href) return null;
-  const match = href.match(/\/people\/([^/]+)/);
+  const match = href.match(/\/people\/([^/]+)(?:\/|$)/);
   return match ? match[1] : null;
 }
 
 async function loadAccounts() {
   if (loading.value || accounts.value) return;
   
-  const personId = props.person._links?.self?.href;
+  const personId = extractPersonId(props.person._links?.self?.href);
   if (!personId) return;
 
   try {

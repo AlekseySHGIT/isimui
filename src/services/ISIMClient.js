@@ -366,13 +366,16 @@ export class ISIMClient {
     }
 
     async getPersonAccounts(personId) {
-        // Get accounts for a person using the full URL path
-        const response = await this.makeRequest(`/itim/rest/people/${personId}/accounts`);
+        const response = await this.makeRequest(`/rest/people/${personId}/accounts`, {
+            headers: {
+                'Accept': '*/*'
+            }
+        });
         return response;
     }
 
     async makeRequest(path, options = {}) {
-        const url = options.rawPath ? path : `${this.baseURI}${path}`;
+        const url = options.fullUrl ? path : (options.rawPath ? `${this.baseURI}${path}` : `${this.baseURI}${path}`);
         this.onLog('API Request', url, 'pending');
 
         try {
