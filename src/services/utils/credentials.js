@@ -13,4 +13,5 @@ export function setUserCredentials(username, password) {
 export function clearUserCredentials() {
     localStorage.removeItem('username');
     localStorage.removeItem('password');
+    //dd
 }
