@@ -366,8 +366,14 @@ export class ISIMClient {
     }
 
     async getPersonAccounts(personId) {
-        const url = `/itim/rest/people/${personId}/accounts`;
-        this.onLog('Get Person Accounts', url, 'pending');
+        // Get accounts for a person using the full URL path
+        const response = await this.makeRequest(`/itim/rest/people/${personId}/accounts`);
+        return response;
+    }
+
+    async makeRequest(path, options = {}) {
+        const url = options.rawPath ? path : `${this.baseURI}${path}`;
+        this.onLog('API Request', url, 'pending');
 
         try {
             const headers = {
@@ -377,14 +383,15 @@ export class ISIMClient {
             };
 
             const response = await fetch(url, {
-                method: 'GET',
+                method: options.method || 'GET',
                 headers,
+                body: options.body,
                 credentials: 'include'
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('Get person accounts failed:', {
+                console.error('API request failed:', {
                     status: response.status,
                     statusText: response.statusText,
                     errorText
@@ -393,13 +400,11 @@ export class ISIMClient {
             }
 
             const data = await response.json();
-            console.log('Person accounts response:', data);
-
-            this.onLog('Get Person Accounts', url, 'success');
+            this.onLog('API Request', url, 'success');
             return data;
         } catch (error) {
-            console.error('Get person accounts error:', error);
-            this.onLog('Get Person Accounts', url, 'error', error.message);
+            console.error('API request error:', error);
+            this.onLog('API Request', url, 'error', error.message);
             throw error;
         }
     }

@@ -134,69 +134,14 @@
               height="calc(100vh - 140px)"
               class="elevation-1"
               @update:options="handleTableOptionsUpdate"
-              v-model:expanded="expanded"
-              :show-expand="true"
             >
-            <!-- Add expand column -->
-            <template v-slot:expanded-row="{ item }">
-              <td :colspan="headers.length">
-                <v-card flat>
-                  <v-card-title class="text-subtitle-1">
-                    Учетные записи пользователя
-                    <v-spacer></v-spacer>
-                    <v-progress-circular
-                      v-if="loadingAccounts[item._personId]"
-                      indeterminate
-                      size="24"
-                      class="mr-2"
-                    ></v-progress-circular>
-                  </v-card-title>
-                  <v-card-text>
-                    <v-list v-if="userAccounts[item._personId]?.length">
-                      <v-list-item
-                        v-for="account in userAccounts[item._personId]"
-                        :key="account.name"
-                      >
-                        <template v-slot:prepend>
-                          <v-icon
-                            :color="account.status === 'active' ? 'success' : 'error'"
-                            class="mr-2"
-                          >
-                            {{ account.status === 'active' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
-                          </v-icon>
-                        </template>
-                        <v-list-item-title>{{ account.name }}</v-list-item-title>
-                        <v-list-item-subtitle>
-                          Статус: {{ account.status === 'active' ? 'Активна' : 'Неактивна' }}
-                        </v-list-item-subtitle>
-                      </v-list-item>
-                    </v-list>
-                    <div v-else-if="!loadingAccounts[item._personId]" class="text-body-1 pa-4">
-                      Учетные записи не найдены
-                    </div>
-                  </v-card-text>
-                </v-card>
-              </td>
-            </template>
-
-            <template v-slot:item="{ item }">
-              <tr>
-                <td v-for="header in headers" :key="header.key">
-                  <template v-if="item[header.key]">
-                    <v-chip
-                      v-if="header.key === 'audio'"
-                      color="primary"
-                      size="small"
-                    >
-                      {{ item[header.key] }}
-                    </v-chip>
-                    <span v-else>{{ item[header.key] }}</span>
-                  </template>
-                  <span v-else>-</span>
-                </td>
-              </tr>
-            </template>
-          </v-data-table>
+              <template #[`item`]="{ item }">
+                <PersonRow
+                  :person="item"
+                  :headers="headers"
+                />
+              </template>
+            </v-data-table>
           </v-card-text>
         </v-card>
       </v-container>
@@ -208,6 +153,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/AuthService'
+import PersonRow from '../components/PersonRow.vue'
 
 const router = useRouter()
 const drawer = ref(true)
@@ -294,22 +240,44 @@ watch(selectedAttributes, (newAttrs) => {
   columnOrder.value = newAttrs
 })
 
-// Extract person ID from href
+// Function to extract personId from href
 function extractPersonId(href) {
+  if (!href) return null;
   const match = href.match(/\/people\/([^/]+)/);
   return match ? match[1] : null;
 }
 
+// Transform people data to include _personId
+const transformPerson = (person) => {
+  const transformed = {};
+  
+  // Copy all attributes from _attributes to the root level
+  if (person._attributes) {
+    Object.assign(transformed, person._attributes);
+  }
+  
+  // Add personId from href
+  if (person._links?.self?.href) {
+    transformed._personId = extractPersonId(person._links.self.href);
+  }
+  
+  // Store original _links for reference
+  transformed._links = person._links;
+  
+  return transformed;
+};
+
 // Load person accounts when expanded
-async function loadPersonAccounts(item) {
-  const personId = extractPersonId(item._links?.self?.href);
-  if (!personId || loadingAccounts.value[personId]) return;
-
-  loadingAccounts.value[personId] = true;
+async function loadPersonAccounts(personId) {
+  if (loadingAccounts.value[personId] || userAccounts.value[personId]) return;
+  
   try {
+    loadingAccounts.value[personId] = true;
     const isimClient = AuthService.getISIMClient();
-    if (!isimClient) throw new Error('Not authenticated');
-
+    if (!isimClient) {
+      throw new Error('Not authenticated');
+    }
+    
     const accounts = await isimClient.getPersonAccounts(personId);
     userAccounts.value[personId] = accounts;
   } catch (error) {
@@ -320,102 +288,78 @@ async function loadPersonAccounts(item) {
   }
 }
 
-// Watch expanded rows to load accounts
-watch(expanded, async (newExpanded) => {
-  for (const item of people.value) {
-    const personId = extractPersonId(item._links?.self?.href);
-    if (personId && newExpanded.includes(item)) {
-      if (!userAccounts.value[personId]) {
-        await loadPersonAccounts(item);
-      }
-    }
+function toggleExpand(personId) {
+  const index = expanded.value.indexOf(personId)
+  if (index === -1) {
+    expanded.value.push(personId)
+    // Load accounts when expanding
+    loadPersonAccounts(personId)
+  } else {
+    expanded.value.splice(index, 1)
   }
-});
+}
 
-// Transform person data to include _personId
-const transformPerson = (person) => {
-  const transformed = {};
+// Function to generate fake accounts for a user
+function getFakeAccounts(person) {
+  if (!person) return []
   
-  // Copy all attributes from _attributes to the root level
-  if (person._attributes) {
-    Object.assign(transformed, person._attributes);
-  }
-  
-  // Add personId
-  if (person._links?.self?.href) {
-    transformed._personId = extractPersonId(person._links.self.href);
-  }
-  
-  // Store original _links for account loading
-  transformed._links = person._links;
-  
-  return transformed;
-};
+  return [
+    {
+      type: 'Active Directory',
+      description: 'Корпоративная учетная запись',
+      username: `${person.cn}@company.local`,
+      status: 'active',
+      lastLogin: '2024-02-10 15:30',
+      details: 'Группы: Domain Users, VPN Users, Remote Desktop Users'
+    },
+    {
+      type: 'PostgreSQL',
+      description: 'База данных',
+      username: person.cn?.toLowerCase(),
+      status: 'active',
+      lastLogin: '2024-02-09 11:45',
+      details: 'Роли: read_only, backup_operator'
+    },
+    {
+      type: 'Jira',
+      description: 'Система управления задачами',
+      username: person.mail,
+      status: 'inactive',
+      lastLogin: null,
+      details: 'Лицензия истекла'
+    },
+    {
+      type: 'VPN',
+      description: 'Удаленный доступ',
+      username: person.cn?.toLowerCase(),
+      status: 'active',
+      lastLogin: '2024-02-10 09:15',
+      details: 'IP: 10.0.0.123, Сертификат действителен до 2024-12-31'
+    },
+    {
+      type: 'Git',
+      description: 'Система контроля версий',
+      username: person.mail,
+      status: 'active',
+      lastLogin: '2024-02-10 16:20',
+      details: 'Доступ: Developer, Репозитории: main-project, utils'
+    }
+  ]
+}
 
 async function loadPeople() {
   if (loading.value) return;
   
+  loading.value = true;
   try {
-    loading.value = true;
     const isimClient = AuthService.getISIMClient();
-    if (!isimClient) {
-      throw new Error('Not authenticated');
-    }
-    
+    if (!isimClient) throw new Error('Not authenticated');
+
     const response = await isimClient.getPeople();
     
-    if (!response || !Array.isArray(response)) {
-      throw new Error('Invalid response format');
-    }
+    // Transform each person to include personId and flatten attributes
+    people.value = response.map(transformPerson);
     
-    // Find which attributes have values in any person
-    const attributesWithValues = new Set();
-    response.forEach(person => {
-      if (person._attributes) {
-        Object.entries(person._attributes).forEach(([attr, value]) => {
-          // Check if the value exists and is not empty
-          if (value && (
-              (Array.isArray(value) && value.length > 0) || // Handle array values
-              (typeof value === 'string' && value.trim() !== '') || // Handle string values
-              (typeof value === 'number') || // Handle number values
-              (typeof value === 'boolean') // Handle boolean values
-          )) {
-            attributesWithValues.add(attr);
-          }
-        });
-      }
-    });
-    
-    // Update available attributes to only show those with values
-    availableAttributes.value = allAttributes.filter(attr => 
-      attributesWithValues.has(attr.value)
-    );
-    
-    // Transform the response data
-    people.value = response.map(person => {
-      const transformedPerson = transformPerson(person);
-      if (person._attributes) {
-        Object.entries(person._attributes).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            transformedPerson[key] = value.join(', ');
-          } else if (value && typeof value === 'string') {
-            transformedPerson[key] = value.trim();
-          } else if (value !== null && value !== undefined) {
-            transformedPerson[key] = value.toString();
-          }
-        });
-      }
-      
-      // Ensure name is always present
-      if (!transformedPerson.cn && person._links?.self?.title) {
-        transformedPerson.cn = person._links.self.title;
-      }
-      
-      return transformedPerson;
-    });
-
-    console.log('Found attributes with values:', Array.from(attributesWithValues));
-    console.log('People loaded:', people.value.length);
   } catch (error) {
     console.error('Failed to load people:', error);
     people.value = [];
@@ -460,5 +404,9 @@ onMounted(async () => {
 
 .v-expansion-panel-text__wrapper {
   padding: 12px !important;
+}
+
+.v-data-table-header__content {
+  white-space: nowrap;
 }
 </style>
