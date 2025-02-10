@@ -181,12 +181,11 @@
           
           <v-card-text class="pa-4">
             <v-data-table
-              :headers="headers"
+              :headers="[{ title: '', key: 'expand', sortable: false, width: '48px' }, ...headers]"
               :items="people"
               :search="search"
               :loading="loading"
               :items-per-page="50"
-              column-draggable
               fixed-header
               density="comfortable"
               hover
@@ -266,26 +265,51 @@ const allAccountAttributes = [
   { title: 'Статус', value: 'eraccountstatus' },
   { title: 'Последний доступ', value: 'erlastaccessdate' },
   { title: 'Владелец', value: 'owner' },
-  { title: 'Тип владения', value: 'eraccountownershiptype' }
+  { title: 'Тип владения', value: 'eraccountownershiptype' },
+  { title: 'Дата создания', value: 'ercreatedate' },
+  { title: 'Дата изменения', value: 'ermodifydate' },
+  { title: 'Дата удаления', value: 'erdeletedate' },
+  { title: 'Дата блокировки', value: 'erlockdate' },
+  { title: 'Дата разблокировки', value: 'erunlockdate' },
+  { title: 'Дата истечения', value: 'erexpirydate' },
+  { title: 'Дата последнего изменения пароля', value: 'erpasswordmodifydate' },
+  { title: 'Дата последней синхронизации', value: 'erlastsyncdate' },
+  { title: 'Дата последней ошибки синхронизации', value: 'erlastsyncerrordate' },
+  { title: 'Ошибка синхронизации', value: 'ersyncerrormessage' },
+  { title: 'Тип учетной записи', value: 'eraccounttype' },
+  { title: 'Идентификатор', value: 'erid' },
+  { title: 'Идентификатор владельца', value: 'erownerid' },
+  { title: 'Идентификатор сервиса', value: 'erserviceid' },
+  { title: 'Идентификатор типа учетной записи', value: 'eraccounttypeid' },
+  { title: 'Идентификатор статуса', value: 'eraccountstatusid' },
+  { title: 'Идентификатор типа владения', value: 'eraccountownershiptypeid' }
 ]
 
 const defaultColumns = ['cn', 'mail', 'sn', 'status', 'description']
+const defaultAccountAttributes = [
+  'eruid',
+  'adisplayname',
+  'adescription',
+  'erservice',
+  'eraccountstatus',
+  'erlastaccessdate',
+  'owner',
+  'eraccountownershiptype'
+]
+
 const selectedAttributes = ref(defaultColumns)
-const selectedAccountAttributes = ref(['eruid', 'adisplayname', 'adescription', 'erservice', 'eraccountstatus', 'erlastaccessdate'])
+const selectedAccountAttributes = ref(defaultAccountAttributes)
 
 // Update headers based on selected attributes
 const headers = computed(() => {
   return selectedAttributes.value.map(attr => {
-    const attrDef = allAttributes.find(a => a.value === attr)
+    const foundAttr = allAttributes.find(a => a.value === attr);
     return {
-      title: attrDef?.title || attr,
+      title: foundAttr?.title || attr,
       key: attr,
-      value: attr,
-      align: 'start',
       sortable: true,
-      draggable: true,
-      width: attr === 'cn' ? '200px' : undefined,
-      class: 'text-subtitle-1 font-weight-medium text-primary-darken-1 py-4'
+      align: attr === 'audio' ? 'end' : 'start',
+      width: attr === 'cn' ? '200px' : undefined
     }
   })
 })
@@ -296,16 +320,44 @@ function handleTableOptionsUpdate(options) {
   if (options.columnOrder) {
     const newOrder = []
     for (const col of options.columnOrder) {
-      if (typeof col === 'string') {
-        newOrder.push(col)
-      } else if (col.key) {
-        newOrder.push(col.key)
+      const key = typeof col === 'string' ? col : col.key
+      if (key && selectedAttributes.value.includes(key)) {
+        newOrder.push(key)
       }
     }
     console.log('New column order:', newOrder)
-    selectedAttributes.value = newOrder
+    if (newOrder.length === selectedAttributes.value.length) {
+      selectedAttributes.value = newOrder
+    }
   }
 }
+
+// Transform people data to include _personId
+const transformPerson = (person) => {
+  const transformed = { ...person };
+  
+  // Copy all attributes from _attributes to the root level
+  if (person._attributes) {
+    Object.assign(transformed, person._attributes);
+  }
+  
+  // Add personId from href
+  if (person._links?.self?.href) {
+    transformed._personId = extractPersonId(person._links.self.href);
+  }
+
+  // Handle audio attribute specially
+  if (transformed.audio) {
+    transformed.audio = 'MY.AUDIO';
+  }
+
+  // Ensure cn (name) is properly displayed
+  if (person._attributes?.cn) {
+    transformed.cn = person._attributes.cn;
+  }
+  
+  return transformed;
+};
 
 // Watch for rail state changes
 watch(rail, (newValue) => {
@@ -328,26 +380,6 @@ function extractPersonId(href) {
   const match = href.match(/\/people\/([^/]+)/);
   return match ? match[1] : null;
 }
-
-// Transform people data to include _personId
-const transformPerson = (person) => {
-  const transformed = {};
-  
-  // Copy all attributes from _attributes to the root level
-  if (person._attributes) {
-    Object.assign(transformed, person._attributes);
-  }
-  
-  // Add personId from href
-  if (person._links?.self?.href) {
-    transformed._personId = extractPersonId(person._links.self.href);
-  }
-  
-  // Store original _links for reference
-  transformed._links = person._links;
-  
-  return transformed;
-};
 
 // Load person accounts when expanded
 async function loadPersonAccounts(personId) {

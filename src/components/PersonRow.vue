@@ -1,6 +1,6 @@
 <template>
   <tr>
-    <td>
+    <td style="width: 48px; padding: 0 4px;">
       <v-btn
         icon="mdi-chevron-down"
         variant="text"
@@ -9,22 +9,40 @@
         @click="toggleExpand"
       ></v-btn>
     </td>
-    <td v-for="header in headers" :key="header.key">
-      <template v-if="person[header.key]">
-        <v-chip
-          v-if="header.key === 'audio'"
-          color="primary"
-          size="small"
-        >
-          {{ person[header.key] }}
-        </v-chip>
-        <span v-else>{{ person[header.key] }}</span>
+    <td v-for="header in headers" :key="header.key" :style="{ width: getColumnWidth(header.key) }">
+      <template v-if="header.key === 'cn'">
+        {{ person._attributes?.cn || '-' }}
       </template>
-      <span v-else>-</span>
+      <template v-else-if="header.key === 'mail'">
+        {{ person._attributes?.mail || '-' }}
+      </template>
+      <template v-else-if="header.key === 'sn'">
+        {{ person._attributes?.sn || '-' }}
+      </template>
+      <template v-else-if="header.key === 'status'">
+        {{ person._attributes?.status || '-' }}
+      </template>
+      <template v-else-if="header.key === 'description'">
+        {{ person._attributes?.description || '-' }}
+      </template>
+      <template v-else-if="header.key === 'audio'">
+        <v-chip v-if="person._attributes?.audio" color="primary" size="small">
+          MY.AUDIO
+        </v-chip>
+        <span v-else>-</span>
+      </template>
+      <template v-else>
+        <template v-if="header.key.toLowerCase().includes('date')">
+          {{ formatDate(person._attributes?.[header.key]) }}
+        </template>
+        <template v-else>
+          {{ person._attributes?.[header.key] || '-' }}
+        </template>
+      </template>
     </td>
   </tr>
   <tr v-if="expanded">
-    <td :colspan="headers.length + 1">
+    <td :colspan="headers.length + 1" class="pa-0">
       <v-card flat class="mx-2 my-1">
         <v-card-title class="text-subtitle-2 py-2 px-4 bg-grey-lighten-4 d-flex align-center">
           <span class="text-grey-darken-1">PersonID:</span>
@@ -44,6 +62,7 @@
           v-if="formattedAccounts?.length"
           density="comfortable"
           hover
+          class="accounts-table"
         >
           <thead>
             <tr>
@@ -62,7 +81,7 @@
                     :text="account[attr] === 'active' ? 'Активен' : 'Неактивен'"
                   ></v-chip>
                 </template>
-                <template v-else-if="attr === 'erlastaccessdate'">
+                <template v-else-if="attr.toLowerCase().includes('date')">
                   {{ formatDate(account[attr]) }}
                 </template>
                 <template v-else>
@@ -166,6 +185,18 @@ function getAccountAttributeTitle(attr) {
   return titles[attr] || attr
 }
 
+function getColumnWidth(key) {
+  const widths = {
+    'cn': '200px',
+    'mail': '250px',
+    'sn': '200px',
+    'status': '120px',
+    'description': '300px',
+    'audio': '100px'
+  }
+  return widths[key] || 'auto'
+}
+
 const formattedAccounts = computed(() => {
   if (!accounts.value) return [];
   return accounts.value.map(account => {
@@ -181,16 +212,24 @@ const formattedAccounts = computed(() => {
 function formatDate(dateString) {
   if (!dateString) return '-';
   try {
-    const date = new Date(dateString);
+    // Parse date in format YYYYMMDDHHMMZ
+    const year = dateString.substring(0, 4);
+    const month = dateString.substring(4, 6);
+    const day = dateString.substring(6, 8);
+    const hour = dateString.substring(8, 10);
+    const minute = dateString.substring(10, 12);
+    
+    const date = new Date(year, month - 1, day, hour, minute);
     return new Intl.DateTimeFormat('ru-RU', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: false
     }).format(date);
-  } catch (error) {
-    console.error('Error formatting date:', error);
+  } catch (e) {
+    console.error('Error formatting date:', e);
     return dateString;
   }
 }
@@ -209,5 +248,19 @@ function toggleExpand() {
 .rotate-180 {
   transform: rotate(180deg);
   transition: transform 0.2s;
+}
+
+.accounts-table {
+  overflow-x: auto;
+  width: 100%;
+}
+
+:deep(.v-table) {
+  width: 100%;
+  table-layout: fixed;
+}
+
+:deep(.v-table__wrapper) {
+  overflow-x: hidden;
 }
 </style>
