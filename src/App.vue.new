@@ -1,0 +1,17 @@
+<template>
+  <v-app>
+    <v-main>
+      <router-view></router-view>
+    </v-main>
+  </v-app>
+</template>
+
+<script setup>
+// The router-view component will render the appropriate component based on the current route
+</script>
+
+<style>
+.v-application {
+  font-family: 'Roboto', sans-serif;
+}
+</style>

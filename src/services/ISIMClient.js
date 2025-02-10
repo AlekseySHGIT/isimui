@@ -1,8 +1,8 @@
 export class ISIMClient {
-    constructor(config) {
-        this.baseURI = config.baseURI.replace(/\/$/, ''); // Remove trailing slash if present
-        this.username = config.username;
-        this.password = config.password;
+    constructor(config = {}) {
+        this.baseURI = config.baseURI?.replace(/\/$/, '') || ''; // Remove trailing slash if present
+        this.username = config.username || '';
+        this.password = config.password || '';
         this.token = {};
         this.onLog = config.onLog || (() => {}); // Add logging callback
         
@@ -11,10 +11,11 @@ export class ISIMClient {
         this.authPath = '/j_security_check';
         this.csrfPath = '/rest/systemusers/me';
         
-        this.validateConfig();
+        // this.validateConfig();
     }
 
     validateConfig() {
+        // Only validate when making actual requests
         if (!this.baseURI || !this.baseURI.startsWith('http')) {
             throw new Error("Invalid base address in configuration");
         }
@@ -389,18 +390,18 @@ export class ISIMClient {
     }
 
     async getPeople({ attributes = [] } = {}) {
-        const url = '/itim/rest/people';
-        const params = new URLSearchParams();
-        
-        // Add attributes if specified
-        if (attributes.length > 0) {
-            params.append('attributes', attributes.join(','));
-        }
-
-        const finalUrl = `${url}${params.toString() ? '?' + params.toString() : ''}`;
-        this.onLog('People', finalUrl, 'pending');
-        
         try {
+            const url = '/itim/rest/people?limit=10';
+            const params = new URLSearchParams();
+            
+            // Add attributes if specified
+            if (attributes.length > 0) {
+                params.append('attributes', attributes.join(','));
+            }
+
+            const finalUrl = `${url}${params.toString() ? '?' + params.toString() : ''}`;
+            this.onLog('People', finalUrl, 'pending');
+            
             // Ensure we have both cookies
             if (!this.token.jsession || !this.token.ltpa2) {
                 throw new Error('Missing required authentication tokens');
@@ -455,3 +456,32 @@ export class ISIMClient {
         return await response.json();
       }
 }
+
+// Get stored credentials if they exist
+const getUserCredentials = () => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+        try {
+            const user = JSON.parse(userStr);
+            return {
+                username: user.username || '',
+                password: user.password || ''
+            };
+        } catch (e) {
+            console.error('Failed to parse stored credentials');
+        }
+    }
+    return { username: '', password: '' };
+};
+
+const { username, password } = getUserCredentials();
+
+// Create and export a default instance
+const defaultClient = new ISIMClient({
+    baseURI: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+    onLog: (component, message, status) => {
+        console.log(`[${component}] ${message} - ${status}`);
+    }
+});
+
+export default defaultClient;
