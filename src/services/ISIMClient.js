@@ -300,16 +300,16 @@ export class ISIMClient {
             // Build query parameters
             const params = new URLSearchParams();
             
-            // Always include attributes parameter
+            // Always include attributes parameter with * to get all attributes
             params.append('attributes', attributes.length > 0 ? attributes.join(',') : '*');
             
             if (limit) {
                 params.append('limit', limit.toString());
             }
 
-            // Build headers with CSRF token and proper Accept header
+            // Build headers with CSRF token
             const headers = {
-                'Accept': '*/*',  // Accept any content type
+                'Accept': '*/*',
                 'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; '),
                 'X-CSRF-Token': this.token.csrf
             };
@@ -366,14 +366,43 @@ export class ISIMClient {
     }
 
     async getPersonAccounts(personId) {
-        const response = await this.fetchWithAuth(`/itim/rest/people/${personId}/accounts`, {
-          params: {
-            attributes: 'owner,eraccountstatus,eruid,eraccountownershiptype',
-            embedded: 'erservice.erservicename'
-          }
-        });
-        return await response.json();
-      }
+        const url = `/itim/rest/people/${personId}/accounts`;
+        this.onLog('Get Person Accounts', url, 'pending');
+
+        try {
+            const headers = {
+                'Accept': '*/*',
+                'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; '),
+                'X-CSRF-Token': this.token.csrf
+            };
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers,
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Get person accounts failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorText
+                });
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('Person accounts response:', data);
+
+            this.onLog('Get Person Accounts', url, 'success');
+            return data;
+        } catch (error) {
+            console.error('Get person accounts error:', error);
+            this.onLog('Get Person Accounts', url, 'error', error.message);
+            throw error;
+        }
+    }
 
     async getSystemUsers() {
         const url = '/itim/rest/systemusers?attributes=eruid';
