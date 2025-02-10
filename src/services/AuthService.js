@@ -14,6 +14,10 @@ class AuthService {
 
   async login(username, password) {
     try {
+      // Clear existing auth cookies first
+      document.cookie = 'LtpaToken2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+      document.cookie = 'JSESSIONID=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+      
       // Create a new ISIMClient instance for this login attempt
       this.isimClient = new ISIMClient({
         baseURI: '/itim',
@@ -41,9 +45,21 @@ class AuthService {
     }
   }
 
-  logout() {
-    localStorage.removeItem('user');
-    this.isimClient = null;
+  async logout() {
+    try {
+      // Clear LTPA2 cookie
+      document.cookie = 'LtpaToken2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+      document.cookie = 'JSESSIONID=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+      
+      // Clear local storage
+      localStorage.removeItem('user')
+      this.isimClient = null
+      
+      // Clear any other auth state
+      this.removeAuthHeader()
+    } catch (error) {
+      console.error('Error during logout:', error)
+    }
   }
 
   getCurrentUser() {

@@ -25,11 +25,11 @@ export class ISIMClient {
     }
 
     async connect() {
-         if (!await this.checkSessionValid()) {
+        // if (!await this.checkSessionValid()) {
             await this.retrieveJSessionCookie();
             await this.retrieveLTPA2Cookie();
             await this.retrieveCSRFToken();
-         }
+        // }
         return this.token;
     }
 
@@ -227,20 +227,34 @@ export class ISIMClient {
     }
 
     async checkSessionValid() {
+       console.log('Checking session validity...');
         if (this.token.csrf && this.token.ltpa2 && this.token.jsession) {
             try {
                 const response = await fetch(this.baseURI + this.csrfPath, {
                     headers: {
-                        'Cookie': `${this.token.ltpa2}; JSESSIONID=${this.token.jsession}`
+                        'Cookie': `${this.token.ltpa2}; ${this.token.jsession}`,
+                        'Accept': 'application/json'
                     },
                     credentials: 'include'
                 });
 
                 if (response.status === 200) {
+                    // Try to get CSRF token from both header and body
                     const csrfToken = response.headers.get('CSRFToken');
                     if (csrfToken) {
                         this.token.csrf = csrfToken;
                         return true;
+                    }
+                    
+                    // If not in header, try to get it from body
+                    try {
+                        const data = await response.json();
+                        if (data && data.csrf) {
+                            this.token.csrf = data.csrf;
+                            return true;
+                        }
+                    } catch (e) {
+                        console.warn('Could not parse response body for CSRF token:', e);
                     }
                 }
             } catch (error) {
