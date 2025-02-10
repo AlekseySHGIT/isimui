@@ -42,18 +42,19 @@
                   Login
                 </v-btn>
               </v-card-actions>
-              <v-snackbar
-                v-model="showError"
-                color="error"
-                timeout="3000"
-              >
-                {{ errorMessage }}
-              </v-snackbar>
             </v-card>
           </v-col>
         </v-row>
       </v-container>
     </v-main>
+
+    <v-snackbar
+      v-model="showError"
+      color="error"
+      timeout="3000"
+    >
+      {{ errorMessage }}
+    </v-snackbar>
   </v-app>
 </template>
 
@@ -64,8 +65,8 @@ import AuthService from '../services/AuthService'
 
 const router = useRouter()
 const form = ref(null)
-const username = ref('')
-const password = ref('')
+const username = ref('ITIM Manager')
+const password = ref('1q@3e4r')
 const loading = ref(false)
 const showError = ref(false)
 const errorMessage = ref('')

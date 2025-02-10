@@ -391,7 +391,7 @@ export class ISIMClient {
 
     async getPeople({ attributes = [] } = {}) {
         try {
-            const url = '/itim/rest/people?limit=10';
+            const url = '/itim/rest/people';
             const params = new URLSearchParams();
             
             // Add attributes if specified

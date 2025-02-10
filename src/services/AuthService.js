@@ -1,62 +1,85 @@
 import axios from 'axios';
-import isimClient from './ISIMClient';
+import { ISIMClient } from './ISIMClient';
 
 class AuthService {
-    constructor() {
-        this.api = axios.create({
-            baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-    }
+  constructor() {
+    this.api = axios.create({
+      baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    this.isimClient = null;
+  }
 
-    async login(username, password) {
-        try {
-            // Set credentials in ISIMClient
-            isimClient.username = username;
-            isimClient.password = password;
-            
-            // Attempt to authenticate with ISIMClient
-            await isimClient.authenticate();
-            
-            // If authentication successful, store user info
-            const userData = {
-                username,
-                password, // Note: In production, consider more secure storage
-                authenticated: true
-            };
-            
-            localStorage.setItem('user', JSON.stringify(userData));
-            return userData;
-        } catch (error) {
-            throw new Error(error.message || 'Login failed');
+  async login(username, password) {
+    try {
+      // Create a new ISIMClient instance for this login attempt
+      this.isimClient = new ISIMClient({
+        baseURI: '/itim',
+        username,
+        password,
+        onLog: (component, message, status) => {
+          console.log(`[${component}] ${message} - ${status}`)
         }
-    }
+      })
 
-    logout() {
-        localStorage.removeItem('user');
-        isimClient.username = '';
-        isimClient.password = '';
+      // Connect and get tokens
+      const tokens = await this.isimClient.connect()
+      
+      // Store auth data
+      const user = {
+        username,
+        tokens
+      }
+      localStorage.setItem('user', JSON.stringify(user))
+      
+      return user;
+    } catch (error) {
+      console.error('Login failed:', error)
+      throw new Error('Login failed. Please check your credentials.');
     }
+  }
 
-    getCurrentUser() {
-        const userStr = localStorage.getItem('user');
-        return userStr ? JSON.parse(userStr) : null;
-    }
+  logout() {
+    localStorage.removeItem('user');
+    this.isimClient = null;
+  }
 
-    setAuthHeader(token) {
-        this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  getCurrentUser() {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      return JSON.parse(userStr);
     }
+    return null;
+  }
 
-    removeAuthHeader() {
-        delete this.api.defaults.headers.common['Authorization'];
-    }
+  isAuthenticated() {
+    const user = this.getCurrentUser();
+    return !!user;
+  }
 
-    isAuthenticated() {
-        const user = this.getCurrentUser();
-        return !!user?.authenticated;
+  getISIMClient() {
+    if (!this.isimClient) {
+      const user = this.getCurrentUser();
+      if (user) {
+        this.isimClient = new ISIMClient({
+          baseURI: '/itim',
+          username: user.username,
+          tokens: user.tokens
+        });
+      }
     }
+    return this.isimClient;
+  }
+
+  setAuthHeader(token) {
+    this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
+
+  removeAuthHeader() {
+    delete this.api.defaults.headers.common['Authorization'];
+  }
 }
 
 export default new AuthService();
