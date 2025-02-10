@@ -15,8 +15,9 @@
     <!-- Sidebar -->
     <v-navigation-drawer
       v-model="drawer"
-      :rail="rail"
+      :rail="false"
       permanent
+      width="250"
     >
       <v-list-item
         prepend-avatar="https://randomuser.me/api/portraits/men/85.jpg"
@@ -87,14 +88,22 @@
             :loading="loading"
             :items-per-page="10"
           >
-            <template v-slot:item.audio="{ item }">
-              <v-chip
-                v-if="item.audio"
-                color="primary"
-                size="small"
-              >
-                {{ item.audio }}
-              </v-chip>
+            <template v-slot:item="{ item }">
+              <tr>
+                <td v-for="header in headers" :key="header.key">
+                  <template v-if="item[header.key]">
+                    <v-chip
+                      v-if="header.key === 'audio'"
+                      color="primary"
+                      size="small"
+                    >
+                      {{ item[header.key] }}
+                    </v-chip>
+                    <span v-else>{{ item[header.key] }}</span>
+                  </template>
+                  <span v-else>-</span>
+                </td>
+              </tr>
             </template>
             <template v-slot:no-data>
               No people found
@@ -107,19 +116,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/AuthService'
 
 const router = useRouter()
-const drawer = ref(false)
-const rail = ref(true)
-const search = ref('')
+const drawer = ref(true)
+const rail = ref(false) // Set rail to false to keep sidebar expanded
 const loading = ref(false)
+const search = ref('')
 const people = ref([])
-const currentUser = ref(AuthService.getCurrentUser())
+const currentUser = ref(null)
 
-// All possible ISIM attributes
+// Define all possible attributes
 const allAttributes = [
   { title: 'Name', value: 'cn' },
   { title: 'Email', value: 'mail' },
@@ -137,7 +146,7 @@ const allAttributes = [
   { title: 'Country', value: 'co' },
   { title: 'Location', value: 'l' },
   { title: 'Organization', value: 'o' },
-  { title: 'Organizational Unit', value: 'ou' },
+  { title: 'Org Unit', value: 'ou' },
   { title: 'Postal Code', value: 'postalCode' },
   { title: 'State', value: 'st' },
   { title: 'Street', value: 'street' },
@@ -145,82 +154,19 @@ const allAttributes = [
   { title: 'Audio', value: 'audio' }
 ]
 
-// Available attributes will be computed based on data
 const availableAttributes = ref([])
-const selectedAttributes = ref(['cn', 'mail', 'department', 'title', 'telephoneNumber', 'manager', 'audio'])
+const selectedAttributes = ref(['cn']) // Start with Name selected by default
 
-// Dynamic headers based on selected attributes
 const headers = computed(() => {
-  const baseHeaders = []
-  
-  if (selectedAttributes.value.includes('cn')) {
-    baseHeaders.push({ title: 'Name', key: 'name' })
-  }
-  if (selectedAttributes.value.includes('mail')) {
-    baseHeaders.push({ title: 'Email', key: 'email' })
-  }
-  if (selectedAttributes.value.includes('department')) {
-    baseHeaders.push({ title: 'Department', key: 'department' })
-  }
-  if (selectedAttributes.value.includes('manager')) {
-    baseHeaders.push({ title: 'Manager', key: 'manager' })
-  }
-  if (selectedAttributes.value.includes('title')) {
-    baseHeaders.push({ title: 'Title', key: 'title' })
-  }
-  if (selectedAttributes.value.includes('telephoneNumber')) {
-    baseHeaders.push({ title: 'Phone', key: 'phone' })
-  }
-  if (selectedAttributes.value.includes('givenName')) {
-    baseHeaders.push({ title: 'Given Name', key: 'givenName' })
-  }
-  if (selectedAttributes.value.includes('sn')) {
-    baseHeaders.push({ title: 'Surname', key: 'surname' })
-  }
-  if (selectedAttributes.value.includes('displayName')) {
-    baseHeaders.push({ title: 'Display Name', key: 'displayName' })
-  }
-  if (selectedAttributes.value.includes('employeeNumber')) {
-    baseHeaders.push({ title: 'Employee Number', key: 'employeeNumber' })
-  }
-  if (selectedAttributes.value.includes('employeeType')) {
-    baseHeaders.push({ title: 'Employee Type', key: 'employeeType' })
-  }
-  if (selectedAttributes.value.includes('physicalDeliveryOfficeName')) {
-    baseHeaders.push({ title: 'Office', key: 'office' })
-  }
-  if (selectedAttributes.value.includes('mobile')) {
-    baseHeaders.push({ title: 'Mobile', key: 'mobile' })
-  }
-  if (selectedAttributes.value.includes('co')) {
-    baseHeaders.push({ title: 'Country', key: 'country' })
-  }
-  if (selectedAttributes.value.includes('l')) {
-    baseHeaders.push({ title: 'Location', key: 'location' })
-  }
-  if (selectedAttributes.value.includes('o')) {
-    baseHeaders.push({ title: 'Organization', key: 'organization' })
-  }
-  if (selectedAttributes.value.includes('ou')) {
-    baseHeaders.push({ title: 'Org Unit', key: 'orgUnit' })
-  }
-  if (selectedAttributes.value.includes('postalCode')) {
-    baseHeaders.push({ title: 'Postal Code', key: 'postalCode' })
-  }
-  if (selectedAttributes.value.includes('st')) {
-    baseHeaders.push({ title: 'State', key: 'state' })
-  }
-  if (selectedAttributes.value.includes('street')) {
-    baseHeaders.push({ title: 'Street', key: 'street' })
-  }
-  if (selectedAttributes.value.includes('description')) {
-    baseHeaders.push({ title: 'Description', key: 'description' })
-  }
-  if (selectedAttributes.value.includes('audio')) {
-    baseHeaders.push({ title: 'Audio', key: 'audio' })
-  }
-  
-  return baseHeaders
+  return selectedAttributes.value.map(attr => {
+    const attrDef = allAttributes.find(a => a.value === attr)
+    return {
+      title: attrDef?.title || attr,
+      key: attr,
+      align: 'start',
+      sortable: true
+    }
+  })
 })
 
 async function loadPeople() {
@@ -245,8 +191,8 @@ async function loadPeople() {
     // Find which attributes have values in any person
     const attributesWithValues = new Set()
     response.forEach(person => {
-      Object.keys(person._attributes || {}).forEach(attr => {
-        if (person._attributes[attr]) {
+      Object.entries(person._attributes || {}).forEach(([attr, value]) => {
+        if (value && value.toString().trim() !== '') {
           attributesWithValues.add(attr)
         }
       })
@@ -257,36 +203,20 @@ async function loadPeople() {
       attributesWithValues.has(attr.value)
     )
     
-    // Update selected attributes to only include available ones
-    selectedAttributes.value = selectedAttributes.value.filter(attr => 
-      attributesWithValues.has(attr)
-    )
-    
-    // Transform the response data
-    people.value = response.map(person => ({
-      name: person._links?.self?.title || 'Unknown',
-      email: person._attributes?.mail || '',
-      department: person._attributes?.department || '',
-      manager: person._attributes?.manager || '',
-      title: person._attributes?.title || '',
-      phone: person._attributes?.telephoneNumber || '',
-      givenName: person._attributes?.givenName || '',
-      surname: person._attributes?.sn || '',
-      displayName: person._attributes?.displayName || '',
-      employeeNumber: person._attributes?.employeeNumber || '',
-      employeeType: person._attributes?.employeeType || '',
-      office: person._attributes?.physicalDeliveryOfficeName || '',
-      mobile: person._attributes?.mobile || '',
-      country: person._attributes?.co || '',
-      location: person._attributes?.l || '',
-      organization: person._attributes?.o || '',
-      orgUnit: person._attributes?.ou || '',
-      postalCode: person._attributes?.postalCode || '',
-      state: person._attributes?.st || '',
-      street: person._attributes?.street || '',
-      description: person._attributes?.description || '',
-      audio: person._attributes?.audio || ''
-    }))
+    // Transform the response data to use attribute keys directly
+    people.value = response.map(person => {
+      const transformedPerson = {}
+      Object.entries(person._attributes || {}).forEach(([key, value]) => {
+        if (value && value.toString().trim() !== '') {
+          transformedPerson[key] = value
+        }
+      })
+      // Ensure cn (name) is always present
+      if (!transformedPerson.cn) {
+        transformedPerson.cn = person._links?.self?.title || 'Unknown'
+      }
+      return transformedPerson
+    })
 
     console.log('Available attributes:', availableAttributes.value)
     console.log('People data:', people.value)

@@ -30,7 +30,7 @@ class AuthService {
 
       // Connect and get tokens
       const tokens = await this.isimClient.connect()
-      
+      console.log('Tokens:', tokens)
       // Store auth data
       const user = {
         username,
