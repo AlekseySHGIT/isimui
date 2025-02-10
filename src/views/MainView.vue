@@ -16,22 +16,30 @@
     <!-- Sidebar -->
     <v-navigation-drawer
       v-model="drawer"
-      :rail="false"
+      :rail="rail"
       permanent
-      width="250"
+      :width="250"
     >
-      <v-list-item
-        prepend-avatar="https://randomuser.me/api/portraits/men/85.jpg"
-        :title="currentUser?.username || 'Пользователь'"
-      >
-        <template v-slot:append>
-          <v-btn
-            variant="text"
-            icon="mdi-chevron-left"
-            @click.stop="rail = !rail"
-          ></v-btn>
-        </template>
-      </v-list-item>
+      <v-list>
+        <v-list-item>
+          <template v-slot:prepend>
+            <v-icon icon="mdi-account" color="primary" size="small"></v-icon>
+          </template>
+          <v-list-item-title class="text-caption text-grey-darken-1">
+            {{ currentUser.displayName }}
+          </v-list-item-title>
+          <template v-slot:append>
+            <v-btn
+              variant="text"
+              :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'"
+              @click.stop="rail = !rail"
+              :title="rail ? 'Развернуть меню' : 'Свернуть меню'"
+              color="primary"
+              size="small"
+            ></v-btn>
+          </template>
+        </v-list-item>
+      </v-list>
 
       <v-divider></v-divider>
 
@@ -44,6 +52,20 @@
           @click="handleLogout"
         ></v-list-item>
       </v-list>
+
+      <template v-slot:append>
+        <div class="pa-2">
+          <v-btn
+            block
+            :prepend-icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'"
+            @click.stop="rail = !rail"
+            :color="rail ? 'primary' : 'grey'"
+            variant="tonal"
+          >
+            {{ rail ? 'Развернуть' : 'Свернуть' }}
+          </v-btn>
+        </div>
+      </template>
     </v-navigation-drawer>
 
     <!-- Main Content -->
@@ -79,19 +101,19 @@
                 <v-btn
                   v-bind="props"
                   variant="outlined"
-                  class="mx-4"
-                  prepend-icon="mdi-view-column"
+                  class="mx-2"
+                  prepend-icon="mdi-account-details"
                 >
-                  Столбцы ({{ selectedAttributes.length }})
+                  Атрибуты пользователя ({{ selectedAttributes.length }})
                 </v-btn>
               </template>
               
               <v-card min-width="300" class="pa-2">
-                <v-card-title class="text-subtitle-1">Выберите столбцы</v-card-title>
+                <v-card-title class="text-subtitle-1">Атрибуты пользователя</v-card-title>
                 <v-divider></v-divider>
                 <v-list density="compact">
                   <v-list-item
-                    v-for="attr in availableAttributes"
+                    v-for="attr in allAttributes"
                     :key="attr.value"
                     :value="attr.value"
                   >
@@ -100,7 +122,44 @@
                         v-model="selectedAttributes"
                         :value="attr.value"
                         hide-details
-                        density="compact"
+                      ></v-checkbox>
+                    </template>
+                    <v-list-item-title>{{ attr.title }}</v-list-item-title>
+                  </v-list-item>
+                </v-list>
+              </v-card>
+            </v-menu>
+
+            <v-menu
+              v-model="showAccountColumnsMenu"
+              :close-on-content-click="false"
+              location="bottom"
+            >
+              <template v-slot:activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  variant="outlined"
+                  class="mx-2"
+                  prepend-icon="mdi-key-variant"
+                >
+                  Атрибуты уч. записей ({{ selectedAccountAttributes.length }})
+                </v-btn>
+              </template>
+              
+              <v-card min-width="300" class="pa-2">
+                <v-card-title class="text-subtitle-1">Атрибуты учетных записей</v-card-title>
+                <v-divider></v-divider>
+                <v-list density="compact">
+                  <v-list-item
+                    v-for="attr in allAccountAttributes"
+                    :key="attr.value"
+                    :value="attr.value"
+                  >
+                    <template v-slot:prepend>
+                      <v-checkbox
+                        v-model="selectedAccountAttributes"
+                        :value="attr.value"
+                        hide-details
                       ></v-checkbox>
                     </template>
                     <v-list-item-title>{{ attr.title }}</v-list-item-title>
@@ -139,6 +198,7 @@
                 <PersonRow
                   :person="item"
                   :headers="headers"
+                  :selected-account-attributes="selectedAccountAttributes"
                 />
               </template>
             </v-data-table>
@@ -161,11 +221,15 @@ const rail = ref(false)
 const loading = ref(false)
 const search = ref('')
 const people = ref([])
-const currentUser = ref(null)
+const currentUser = ref({
+  username: '',
+  displayName: ''
+})
 const expanded = ref([])
 const userAccounts = ref({})
 const loadingAccounts = ref({})
 const showColumnsMenu = ref(false)
+const showAccountColumnsMenu = ref(false)
 
 // Define all possible attributes with Russian titles
 const allAttributes = [
@@ -194,10 +258,20 @@ const allAttributes = [
   { title: 'Статус', value: 'status' }
 ]
 
+const allAccountAttributes = [
+  { title: 'Логин', value: 'eruid' },
+  { title: 'Отображаемое имя', value: 'adisplayname' },
+  { title: 'Описание', value: 'adescription' },
+  { title: 'Сервис', value: 'erservice' },
+  { title: 'Статус', value: 'eraccountstatus' },
+  { title: 'Последний доступ', value: 'erlastaccessdate' },
+  { title: 'Владелец', value: 'owner' },
+  { title: 'Тип владения', value: 'eraccountownershiptype' }
+]
+
 const defaultColumns = ['cn', 'mail', 'sn', 'status', 'description']
-const availableAttributes = ref([])
 const selectedAttributes = ref(defaultColumns)
-const columnOrder = ref([...defaultColumns])
+const selectedAccountAttributes = ref(['eruid', 'adisplayname', 'adescription', 'erservice', 'eraccountstatus', 'erlastaccessdate'])
 
 // Update headers based on selected attributes
 const headers = computed(() => {
@@ -229,15 +303,23 @@ function handleTableOptionsUpdate(options) {
       }
     }
     console.log('New column order:', newOrder)
-    columnOrder.value = newOrder
     selectedAttributes.value = newOrder
   }
 }
 
+// Watch for rail state changes
+watch(rail, (newValue) => {
+  console.log('Rail state changed:', newValue)
+})
+
 // Watch for changes in selected attributes
 watch(selectedAttributes, (newAttrs) => {
   console.log('Selected attributes changed:', newAttrs)
-  columnOrder.value = newAttrs
+})
+
+// Watch for changes in selected account attributes
+watch(selectedAccountAttributes, (newAttrs) => {
+  console.log('Selected account attributes changed:', newAttrs)
 })
 
 // Function to extract personId from href
@@ -373,12 +455,29 @@ function handleLogout() {
   router.push('/')
 }
 
+// Get current user information
+async function getCurrentUser() {
+  try {
+    const storedUser = JSON.parse(localStorage.getItem('user'))
+    if (storedUser) {
+      currentUser.value = {
+        username: storedUser.username,
+        displayName: storedUser.username // You can add more user info here if needed
+      }
+    }
+  } catch (error) {
+    console.error('Error getting current user:', error)
+  }
+}
+
 // Load people automatically when the component is mounted
 onMounted(async () => {
   if (!AuthService.isAuthenticated()) {
     router.push('/')
     return
   }
+  
+  await getCurrentUser()
   await loadPeople()
 })
 </script>

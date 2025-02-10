@@ -366,7 +366,7 @@ export class ISIMClient {
     }
 
     async getPersonAccounts(personId) {
-        const response = await this.makeRequest(`/rest/people/${personId}/accounts`, {
+        const response = await this.makeRequest(`/rest/people/${personId}/accounts?attributes=*`, {
             headers: {
                 'Accept': '*/*'
             }
