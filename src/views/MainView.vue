@@ -179,10 +179,8 @@ async function loadPeople() {
       throw new Error('Not authenticated')
     }
     
-    // Load with all possible attributes to check which ones have values
-    const response = await isimClient.getPeople({
-      attributes: allAttributes.map(attr => attr.value)
-    })
+    // Get all people - their _attributes will be included in the response
+    const response = await isimClient.getPeople()
     
     if (!response || !Array.isArray(response)) {
       throw new Error('Invalid response format')
@@ -191,11 +189,20 @@ async function loadPeople() {
     // Find which attributes have values in any person
     const attributesWithValues = new Set()
     response.forEach(person => {
-      Object.entries(person._attributes || {}).forEach(([attr, value]) => {
-        if (value && value.toString().trim() !== '') {
-          attributesWithValues.add(attr)
-        }
-      })
+      if (person._attributes) {
+        Object.keys(person._attributes).forEach(attr => {
+          const value = person._attributes[attr]
+          // Check if the value exists and is not empty
+          if (value && (
+              (Array.isArray(value) && value.length > 0) || // Handle array values
+              (typeof value === 'string' && value.trim() !== '') || // Handle string values
+              (typeof value === 'number') || // Handle number values
+              (typeof value === 'boolean') // Handle boolean values
+          )) {
+            attributesWithValues.add(attr)
+          }
+        })
+      }
     })
     
     // Update available attributes to only show those with values
@@ -206,19 +213,27 @@ async function loadPeople() {
     // Transform the response data to use attribute keys directly
     people.value = response.map(person => {
       const transformedPerson = {}
-      Object.entries(person._attributes || {}).forEach(([key, value]) => {
-        if (value && value.toString().trim() !== '') {
-          transformedPerson[key] = value
-        }
-      })
-      // Ensure cn (name) is always present
-      if (!transformedPerson.cn) {
-        transformedPerson.cn = person._links?.self?.title || 'Unknown'
+      if (person._attributes) {
+        Object.entries(person._attributes).forEach(([key, value]) => {
+          // Handle different types of values
+          if (Array.isArray(value)) {
+            // Join array values with comma
+            transformedPerson[key] = value.join(', ')
+          } else if (value && typeof value === 'string') {
+            transformedPerson[key] = value.trim()
+          } else if (value !== null && value !== undefined) {
+            transformedPerson[key] = value.toString()
+          }
+        })
+      }
+      // Ensure name is always present (from _links.self.title)
+      if (!transformedPerson.cn && person._links?.self?.title) {
+        transformedPerson.cn = person._links.self.title
       }
       return transformedPerson
     })
 
-    console.log('Available attributes:', availableAttributes.value)
+    console.log('Found attributes with values:', Array.from(attributesWithValues))
     console.log('People data:', people.value)
   } catch (error) {
     console.error('Failed to load people:', error)

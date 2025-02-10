@@ -25,13 +25,27 @@ export class ISIMClient {
     }
 
     async connect() {
-        // if (!await this.checkSessionValid()) {
-            await this.retrieveLTPA2Cookie();
-            await this.retrieveJSessionCookie();
+        try {
+            console.log('Starting authentication flow...');
             
+            // 1. First get LTPA2 token - this establishes the main authentication
+            await this.retrieveLTPA2Cookie();
+            console.log('LTPA2 token retrieved successfully');
+            
+            // 2. Then get JSESSION - this creates the session with the authenticated token
+            await this.retrieveJSessionCookie();
+            console.log('JSESSION cookie retrieved successfully');
+            
+            // 3. Finally get CSRF token - this requires both previous tokens
             await this.retrieveCSRFToken();
-        // }
-        return this.token;
+            console.log('CSRF token retrieved successfully');
+            
+            console.log('Authentication flow completed successfully');
+            return this.token;
+        } catch (error) {
+            console.error('Authentication flow failed:', error);
+            throw error;
+        }
     }
 
     async retrieveJSessionCookie() {
@@ -269,13 +283,13 @@ export class ISIMClient {
         return this.token;
     }
 
+    async getPeople() {
+        return this.searchPeople({ attributes: ['*'] });  // Use * to get all attributes
+    }
+
     async searchPeople({ 
         attributes = [], 
-        embedded = [], 
-        limit = 1000, 
-        sort = '', 
-        forms = false, 
-        subordinateFilter = false,
+        limit = 1000,
         range = '',
         noCache = false
     } = {}) {
@@ -285,30 +299,19 @@ export class ISIMClient {
         try {
             // Build query parameters
             const params = new URLSearchParams();
-            if (attributes.length > 0) {
-                params.append('attributes', attributes.join(','));
-            }
-            if (embedded.length > 0) {
-                params.append('embedded', embedded.join(','));
-            }
+            
+            // Always include attributes parameter
+            params.append('attributes', attributes.length > 0 ? attributes.join(',') : '*');
+            
             if (limit) {
                 params.append('limit', limit.toString());
             }
-            if (sort) {
-                params.append('sort', sort);
-            }
-            if (forms) {
-                params.append('forms', 'true');
-            }
-            if (subordinateFilter) {
-                params.append('subordinateFilter', 'true');
-            }
 
-            // Build headers
+            // Build headers with CSRF token and proper Accept header
             const headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; ')
+                'Accept': '*/*',  // Accept any content type
+                'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; '),
+                'X-CSRF-Token': this.token.csrf
             };
 
             if (noCache) {
@@ -329,7 +332,13 @@ export class ISIMClient {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error('People search failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorText
+                });
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
             }
 
             const data = await response.json();
@@ -337,23 +346,34 @@ export class ISIMClient {
 
             this.onLog('People Search', searchUrl, 'success', JSON.stringify({
                 url,
-                resultCount: Array.isArray(data) ? data.length : 0,
-                params: Object.fromEntries(params.entries())
+                resultCount: Array.isArray(data) ? data.length : 0
             }));
 
             return data;
 
         } catch (error) {
+            console.error('People search error:', error);
             this.onLog('People Search', searchUrl, 'error', JSON.stringify({
                 error: error.message,
-                cookies: {
-                    jsession: this.token.jsession,
-                    ltpa2: this.token.ltpa2
+                tokens: {
+                    jsession: !!this.token.jsession,
+                    ltpa2: !!this.token.ltpa2,
+                    csrf: !!this.token.csrf
                 }
             }));
-            throw new Error(`Failed to search people: ${error.message}`);
+            throw error;
         }
     }
+
+    async getPersonAccounts(personId) {
+        const response = await this.fetchWithAuth(`/itim/rest/people/${personId}/accounts`, {
+          params: {
+            attributes: 'owner,eraccountstatus,eruid,eraccountownershiptype',
+            embedded: 'erservice.erservicename'
+          }
+        });
+        return await response.json();
+      }
 
     async getSystemUsers() {
         const url = '/itim/rest/systemusers?attributes=eruid';
@@ -404,23 +424,6 @@ export class ISIMClient {
         }
     }
 
-    async getPeople({ attributes = [] } = {}) {
-        return this.searchPeople({ 
-            attributes,
-            limit: 1000,
-            sort: 'cn'
-        });
-    }
-
-    async getPersonAccounts(personId) {
-        const response = await this.fetchWithAuth(`/itim/rest/people/${personId}/accounts`, {
-          params: {
-            attributes: 'owner,eraccountstatus,eruid,eraccountownershiptype',
-            embedded: 'erservice.erservicename'
-          }
-        });
-        return await response.json();
-      }
 }
 
 // Get stored credentials if they exist
