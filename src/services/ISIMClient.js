@@ -371,6 +371,31 @@ export class ISIMClient {
                 'Accept': '*/*'
             }
         });
+
+        // Transform the response to include erservice href from _links
+        if (Array.isArray(response)) {
+            return response.map(account => {
+                const erserviceHref = account._links?.erservice?.href;
+                // Extract service ID from href if present
+                let erserviceId = null;
+                if (erserviceHref) {
+                    const match = erserviceHref.match(/\/services\/([^/]+)/);
+                    if (match) {
+                        erserviceId = match[1];
+                    }
+                }
+                return {
+                    ...account,
+                    _links: {
+                        ...account._links,
+                        erservice: {
+                            href: erserviceHref,
+                            id: erserviceId
+                        }
+                    }
+                };
+            });
+        }
         return response;
     }
 
@@ -461,7 +486,39 @@ export class ISIMClient {
         }
     }
 
+    async getServiceDetails(serviceId) {
+        // Get specific attributes we're interested in
+        const url = `/rest/services/${serviceId}?attributes=*`;
+        this.onLog('Service Details', url, 'pending');
+        
+        try {
+            const response = await this.makeRequest(url, {
+                rawPath: true,
+                method: 'GET'
+            });
+            
+            this.onLog('Service Details', url, 'success');
+            // Extract attributes from the response
+            const attributes = response?._attributes || response?.attributes || {};
+            return {
+                ...response,
+                attributes: {
+                    ...attributes,
+                    erservicename: attributes.erservicename || '',
+                    owner: attributes.owner || '',
+                    parent: attributes.parent || '',
+                    description: attributes.description || '',
+                    erserviceid: attributes.erserviceid || ''
+                }
+            };
+        } catch (error) {
+            this.onLog('Service Details', url, 'error', error);
+            return null;
+        }
+    }
+
     async getAllServicesWithNames() {
+        console.log('Retrieving service details...');
         try {
             // First, get list of all services
             const services = await this.getServices();
@@ -478,8 +535,11 @@ export class ISIMClient {
                 
                 const serviceId = match[1];
                 const details = await this.getServiceDetails(serviceId);
-                if (details?._attributes) {
-                    serviceMap[serviceId] = details._attributes;
+                if (details?.attributes) {
+                    serviceMap[serviceId] = {
+                        ...details.attributes,
+                        id: serviceId
+                    };
                 }
             });
 
@@ -487,32 +547,14 @@ export class ISIMClient {
             console.log('Service map:', serviceMap);
             return serviceMap;
         } catch (error) {
-            console.error('Error fetching service names:', error);
+            console.error('Error fetching service details:', error);
             return {};
         }
     }
 
-    async getServiceDetails(serviceId) {
-        // Get all attributes by using * in the query
-        const url = `/rest/services/${serviceId}?attributes=*`;
-        this.onLog('Service Details', url, 'pending');
-        
-        try {
-            const response = await this.makeRequest(url, {
-                rawPath: true,
-                method: 'GET'
-            });
-            
-            this.onLog('Service Details', url, 'success');
-            return response;
-        } catch (error) {
-            this.onLog('Service Details', url, 'error', error);
-            return null;
-        }
-    }
-
     async getServices() {
-        const url = '/rest/services';
+        console.log('Retrieving services...');
+        const url = '/rest/services?attributes=*';
         this.onLog('Services', url, 'pending');
         
         try {
@@ -522,7 +564,15 @@ export class ISIMClient {
             });
             
             this.onLog('Services', url, 'success');
-            return response._embedded?.services || [];
+            // Check if response is an array directly
+            if (Array.isArray(response)) {
+                return response;
+            }
+            // Try different possible response structures
+            return response._embedded?.services || 
+                   response.services || 
+                   response._embedded || 
+                   [];
         } catch (error) {
             this.onLog('Services', url, 'error', error);
             return [];

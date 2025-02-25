@@ -294,8 +294,8 @@ const defaultAccountAttributes = [
   'adescription',
   'erservice',
   'eraccountstatus',
+  'eraccountcompliance',
   'erlastaccessdate',
-  'owner',
   'eraccountownershiptype'
 ]
 

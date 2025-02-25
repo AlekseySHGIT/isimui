@@ -44,8 +44,8 @@
   <tr v-if="expanded">
     <td :colspan="headers.length + 1" class="pa-0">
       <v-card flat class="mx-2 my-1">
-        <v-card-title class="text-subtitle-2 py-2 px-4 bg-grey-lighten-4 d-flex align-center">
-          <span class="text-grey-darken-1">PersonID:</span>
+        <!-- <v-card-title class="text-subtitle-2 py-2 px-4 bg-grey-lighten-4 d-flex align-center">
+          <span class="text-grey-darken-3">PersonID:</span>
           <v-chip
             class="ml-2"
             size="small"
@@ -54,7 +54,7 @@
           >
             {{ extractPersonId(props.person._links?.self?.href) }}
           </v-chip>
-        </v-card-title>
+        </v-card-title> -->
         <div v-if="loading" class="d-flex justify-center pa-4">
           <v-progress-circular indeterminate></v-progress-circular>
         </div>
@@ -77,9 +77,29 @@
                 <template v-if="attr === 'eraccountstatus'">
                   <v-chip
                     size="small"
-                    :color="account[attr] === 'active' ? 'success' : 'error'"
-                    :text="account[attr] === 'active' ? 'Активен' : 'Неактивен'"
+                    :color="account[attr] === '0' ? 'success' : 'error'"
+                    :text="account[attr] === '0' ? 'Активен' : 'Неактивен'"
                   ></v-chip>
+                </template>
+                <template v-else-if="attr === 'eraccountcompliance'">
+                  <v-icon
+                    v-if="account[attr] === '2'"
+                    color="error"
+                    icon="mdi-alert-circle"
+                    size="small"
+                  />
+                  <v-icon
+                    v-else-if="account[attr] === '3'"
+                    color="warning"
+                    icon="mdi-alert"
+                    size="small"
+                  />
+                  <v-icon
+                    v-else-if="account[attr] === '1'"
+                    color="success"
+                    icon="mdi-check-circle"
+                    size="small"
+                  />
                 </template>
                 <template v-else-if="attr.toLowerCase().includes('date')">
                   {{ formatDate(account[attr]) }}
@@ -123,7 +143,7 @@ const props = defineProps({
   },
   selectedAccountAttributes: {
     type: Array,
-    default: () => ['eruid', 'adisplayname', 'adescription', 'erservice', 'eraccountstatus', 'erlastaccessdate']
+    default: () => ['eruid', 'adisplayname', 'adescription', 'erservice', 'eraccountstatus', 'eraccountcompliance', 'erlastaccessdate']
   },
   services: {
     type: Object,
@@ -141,20 +161,15 @@ function extractPersonId(href) {
   return match ? match[1] : null;
 }
 
-function getServiceName(erservice) {
-  if (!erservice) return '-';
-  
-  // Extract service ID from DN format like:
-  // erglobalid=00000000000000000002,ou=services,erglobalid=00000000000000000000,ou=cbrf,dc=com
-  const match = erservice.match(/erglobalid=([^,]+)/);
-  const serviceId = match ? match[1] : null;
+function getServiceName(erservice, serviceId) {
+  if (!erservice && !serviceId) return '-';
   
   if (serviceId && props.services[serviceId]) {
     const serviceAttrs = props.services[serviceId];
-    return serviceAttrs.erservicename || serviceAttrs.description || erservice;
+    return serviceAttrs.erservicename || serviceAttrs.description || erservice || serviceId;
   }
   
-  return erservice;
+  return erservice || '-';
 }
 
 async function loadAccounts() {
@@ -197,7 +212,9 @@ const formattedAccounts = computed(() => {
     const formatted = {};
     props.selectedAccountAttributes.forEach(attr => {
       if (attr === 'erservice') {
-        formatted[attr] = getServiceName(account._attributes?.erservice);
+        // Get service ID from _links.erservice.id that we added in ISIMClient
+        const serviceId = account._links?.erservice?.id;
+        formatted[attr] = getServiceName(account._attributes?.erservice, serviceId);
       } else {
         formatted[attr] = account._attributes?.[attr] || '';
       }
@@ -208,13 +225,13 @@ const formattedAccounts = computed(() => {
 
 function getAccountAttributeTitle(attr) {
   const titles = {
-    eruid: 'Логин',
+    eruid: 'ID пользователя',
     adisplayname: 'Отображаемое имя',
     adescription: 'Описание',
     erservice: 'Сервис',
     eraccountstatus: 'Статус',
+    eraccountcompliance: 'Состояние',
     erlastaccessdate: 'Последний доступ',
-    owner: 'Владелец',
     eraccountownershiptype: 'Тип владения'
   }
   return titles[attr] || attr
