@@ -1,12 +1,12 @@
 <template>
-  <tr>
+  <tr @click="showUserRoles" style="cursor: pointer">
     <td style="width: 48px; padding: 0 4px;">
       <v-btn
         icon="mdi-chevron-down"
         variant="text"
         size="small"
         :class="{ 'rotate-180': expanded }"
-        @click="toggleExpand"
+        @click.stop="toggleExpand"
       ></v-btn>
     </td>
     <td v-for="header in headers" :key="header.key" :style="{ width: getColumnWidth(header.key), maxWidth: getColumnWidth(header.key) }">
@@ -84,13 +84,9 @@
           </thead>
           <tbody>
             <tr v-for="(account, index) in formattedAccounts" 
-                :key="account.eruid" 
-                :class="[
-                  index % 2 === 0 ? 'bg-grey-lighten-5' : '',
-                  'account-row',
-                  { 'selected-account': selectedAccount?.eruid === account.eruid }
-                ]"
-                @click="showAccountGroups(account)"
+                :key="index" 
+                @click.stop="(event) => showAccountGroups(account, index, event)"
+                :class="{ 'selected-row': selectedAccountIndex === index }"
                 style="cursor: pointer"
             >
               <td v-for="attr in props.selectedAccountAttributes" :key="attr">
@@ -174,7 +170,7 @@
   >
     <v-toolbar color="blue-lighten-5" class="px-4 border-b">
       <v-toolbar-title class="text-primary d-flex align-center text-body-1">
-       
+        <v-icon icon="mdi-account-group" class="mr-2" color="primary"></v-icon>
         Группы 
       </v-toolbar-title>
       <v-spacer></v-spacer>
@@ -182,16 +178,28 @@
     </v-toolbar>
 
     <div class="pa-4">
+      <v-text-field
+        v-model="searchQuery"
+        prepend-icon="mdi-magnify"
+        label="Поиск"
+        variant="outlined"
+        density="compact"
+        hide-details
+        class="mb-4"
+      ></v-text-field>
+
       <div class="d-flex align-center mb-4">
         <v-icon icon="mdi-account" class="mr-2" color="primary" size="small"></v-icon>
         <span class="text-body-2 text-medium-emphasis">{{ selectedAccount?.eruid }}</span>
       </div>
 
-      <template v-if="accountGroups.length">
+      <template v-if="filteredGroups.length">
         <div 
-          v-for="(group, index) in accountGroups" 
+          v-for="(group, index) in filteredGroups" 
           :key="index"
           class="group-item mb-2 pa-3 rounded-lg"
+          @click.stop="selectGroup(group)"
+          style="cursor: pointer"
         >
           <div class="d-flex align-center mb-1">
             <v-icon icon="mdi-folder-account" color="primary" size="small" class="mr-2"></v-icon>
@@ -202,21 +210,91 @@
           </div>
         </div>
       </template>
-      <v-card-text v-else class="text-center text-grey-darken-1">
-        <v-icon icon="mdi-account-group-off" size="large" class="mb-2"></v-icon>
-        <div>Нет групп</div>
-      </v-card-text>
+      <div v-else class="text-center text-medium-emphasis">
+        <v-icon icon="mdi-folder-off" size="large" color="grey" class="mb-2"></v-icon>
+        <div>{{ searchQuery ? 'Ничего не найдено' : 'Нет групп' }}</div>
+      </div>
+    </div>
+  </v-navigation-drawer>
+
+  <!-- Roles Navigation Drawer -->
+  <v-navigation-drawer
+    v-model="showRoles"
+    location="right"
+    temporary
+    width="400"
+    class="roles-drawer"
+    elevation="2"
+  >
+    <v-toolbar color="blue-lighten-5" class="px-4 border-b">
+      <v-toolbar-title class="text-primary d-flex align-center text-body-1">
+        <v-icon icon="mdi-shield-account" class="mr-2" color="primary"></v-icon>
+        Роли пользователя
+      </v-toolbar-title>
+      <v-spacer></v-spacer>
+      <v-btn icon="mdi-close" variant="text" @click="showRoles = false"></v-btn>
+    </v-toolbar>
+
+    <div class="pa-4">
+      <v-text-field
+        v-model="searchQuery"
+        prepend-icon="mdi-magnify"
+        label="Поиск"
+        variant="outlined"
+        density="compact"
+        hide-details
+        class="mb-4"
+      ></v-text-field>
+
+      <div class="d-flex align-center mb-4">
+        <v-icon icon="mdi-account" class="mr-2" color="primary" size="small"></v-icon>
+        <span class="text-body-2 text-medium-emphasis">{{ person._attributes?.ercustomdisplay || person._attributes?.cn }}</span>
+      </div>
+
+      <v-progress-circular
+        v-if="loading"
+        indeterminate
+        color="primary"
+        class="ma-4"
+      ></v-progress-circular>
+
+      <template v-if="filteredRoles.length">
+        <div 
+          v-for="(role, index) in filteredRoles" 
+          :key="index"
+          class="role-item mb-2 pa-3 rounded-lg"
+          @click.stop="selectRole(role)"
+          style="cursor: pointer"
+        >
+          <div class="d-flex align-center">
+            <v-icon icon="mdi-shield" color="primary" size="small" class="mr-2"></v-icon>
+            <span class="text-subtitle-2">{{ getRoleName(role) }}</span>
+          </div>
+        </div>
+      </template>
+      <div v-else class="text-center text-medium-emphasis">
+        <v-icon icon="mdi-shield-off" size="large" color="grey" class="mb-2"></v-icon>
+        <div>{{ searchQuery ? 'Ничего не найдено' : 'Нет ролей' }}</div>
+      </div>
     </div>
   </v-navigation-drawer>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import AuthService from '../services/AuthService'
+import defaultClient from '../services/ISIMClient'
 
 const showGroups = ref(false)
+const showRoles = ref(false)
 const accountGroups = ref([])
-const selectedAccount = ref(null)
+const userRoles = ref([])
+const searchQuery = ref('')
+const selectedAccountIndex = ref(null)
+const loading = ref(false)
+
+// Inject the role mapping from parent
+const roleMapping = inject('roleMapping', {})
 
 const props = defineProps({
   person: {
@@ -238,9 +316,8 @@ const props = defineProps({
 })
 
 const expanded = ref(false)
-const loading = ref(false)
-const loadingGroups = ref(false)
 const accounts = ref(null)
+const selectedAccount = ref(null)
 
 function extractPersonId(href) {
   if (!href) return null;
@@ -389,7 +466,85 @@ function getComplianceStatus(value) {
   return statuses[value] || 'Неизвестно'
 }
 
-function showAccountGroups(account) {
+async function showUserRoles(event) {
+  // Prevent event from bubbling up if clicking on expand button
+  if (event.target.closest('.v-btn')) {
+    return;
+  }
+  
+  console.log('Opening roles for user:', props.person);
+  
+  // Get roles from person attributes
+  const roles = props.person._attributes?.erroles;
+  console.log('Roles from user:', roles);
+  
+  if (!roles) {
+    userRoles.value = [];
+    console.log('No roles found for this user');
+    return;
+  }
+  
+  // Process the roles to extract roleIds from the href
+  userRoles.value = roles.map(role => {
+    const match = role.match(/\/roles\/([^,]+)/);
+    return match ? match[1] : role;
+  });
+
+  searchQuery.value = ''; // Reset search when showing roles
+  showRoles.value = true;
+}
+
+function getRoleName(roleId) {
+  const name = roleMapping.value[roleId];
+  console.log(`Getting role name for ${roleId}:`, name);
+  return name || roleId;
+}
+
+function getGroupName(groupDN) {
+  if (!groupDN) return '';
+  const match = groupDN.match(/CN=([^,]+)/);
+  return match ? match[1] : groupDN;
+}
+
+function getGroupPath(groupDN) {
+  if (!groupDN) return '';
+  const ous = groupDN.match(/OU=([^,]+)/g);
+  return ous ? ous.map(ou => ou.replace('OU=', '')).join(' → ') : '';
+}
+
+const filteredGroups = computed(() => {
+  if (!searchQuery.value) return accountGroups.value;
+  const query = searchQuery.value.toLowerCase();
+  return accountGroups.value.filter(group => {
+    const name = getGroupName(group).toLowerCase();
+    const path = getGroupPath(group).toLowerCase();
+    return name.includes(query) || path.includes(query);
+  });
+});
+
+const filteredRoles = computed(() => {
+  if (!searchQuery.value) return userRoles.value;
+  const query = searchQuery.value.toLowerCase();
+  return userRoles.value.filter(roleId => {
+    const name = getRoleName(roleId).toLowerCase();
+    return name.includes(query);
+  });
+});
+
+function selectGroup(group) {
+  console.log('Selected group:', getGroupName(group));
+  // Add any additional group selection logic here
+}
+
+function selectRole(role) {
+  console.log('Selected role:', role);
+  // Add any additional role selection logic here
+}
+
+function showAccountGroups(account, index, event) {
+  // Prevent event from bubbling up to parent elements
+  event.stopPropagation();
+  
   console.log('Opening groups for account:', account);
   
   // Get groups from account attributes
@@ -403,23 +558,12 @@ function showAccountGroups(account) {
   }
   
   selectedAccount.value = account._attributes;
+  selectedAccountIndex.value = index;
   
   // Convert to array if it's a single item
   accountGroups.value = Array.isArray(groups) ? groups : [groups];
-  
+  searchQuery.value = ''; // Reset search when showing groups
   showGroups.value = true;
-}
-
-function getGroupName(groupDN) {
-  if (!groupDN) return '';
-  const match = groupDN.match(/CN=([^,]+)/);
-  return match ? match[1] : groupDN;
-}
-
-function getGroupPath(groupDN) {
-  if (!groupDN) return '';
-  const ous = groupDN.match(/OU=([^,]+)/g);
-  return ous ? ous.map(ou => ou.replace('OU=', '')).join(' → ') : '';
 }
 </script>
 
@@ -469,16 +613,16 @@ td {
   font-weight: 500 !important;
 }
 
-.account-row {
-  transition: background-color 0.2s;
+.selected-row {
+  background-color: var(--v-primary-lighten-5) !important;
 }
 
-.account-row:hover {
-  background-color: rgb(var(--v-theme-primary-lighten-5)) !important;
+.selected-row:hover {
+  background-color: var(--v-primary-lighten-4) !important;
 }
 
-.selected-account {
-  background-color: rgb(var(--v-theme-primary-lighten-4)) !important;
+tr:hover {
+  background-color: rgba(0, 0, 0, 0.04);
 }
 
 .v-list-item {
@@ -487,6 +631,7 @@ td {
 
 .groups-drawer {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  z-index: 100;
 }
 
 .groups-drawer::v-deep .v-navigation-drawer__content {
@@ -494,19 +639,27 @@ td {
   overflow-x: hidden;
 }
 
-.group-item {
-  background-color: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-primary), 0.1);
+.group-item, .role-item {
+  border: 1px solid rgba(0, 0, 0, 0.12);
   transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
 
-.group-item:hover {
-  background-color: rgb(var(--v-theme-primary-lighten-5));
-  border-color: rgba(var(--v-theme-primary), 0.2);
+.group-item:hover, .role-item:hover {
+  background-color: rgba(var(--v-theme-primary), 0.04);
+  border-color: rgba(var(--v-theme-primary), 0.1);
 }
 
-/* Ensure the drawer appears above other content */
 .v-navigation-drawer {
-  z-index: 1000 !important;
+  pointer-events: auto !important;
+}
+
+.v-navigation-drawer__content {
+  pointer-events: auto !important;
+}
+
+.roles-drawer {
+  z-index: 100;
 }
 </style>

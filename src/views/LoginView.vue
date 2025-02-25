@@ -15,10 +15,7 @@
                 </v-toolbar-title>
               </v-toolbar>
               <v-card-text class="pt-6">
-                <div class="text-center mb-4">
-                  <v-icon icon="mdi-account-key" color="primary" size="x-large"></v-icon>
-                  <h2 class="text-h6 mt-2 text-primary">Вход в систему</h2>
-                </div>
+              
                 <v-form ref="form">
                 
                   <v-text-field
@@ -46,17 +43,22 @@
                   />
                   <v-select
                     v-model="serverUrl"
-                    :items="serverOptions"
-                    :rules="[rules.required]"
-                    label="Сервер"
-                    name="server"
-                    prepend-icon="mdi-server"
-                    required
+                    :items="[
+                      { title: 'Локальный сервер', value: LOCAL_SERVER_URL },
+                      { title: 'Удаленный сервер', value: REMOTE_SERVER_URL }
+                    ]"
                     item-title="title"
                     item-value="value"
+                    label="Сервер"
                     variant="outlined"
-                    color="primary"
-                  />
+                    density="compact"
+                    hide-details
+                    class="mb-3"
+                  ></v-select>
+                  
+                  <div v-if="serverUrl === REMOTE_SERVER_URL" class="text-caption text-grey-darken-1 mb-3">
+                    IP адрес: {{ REMOTE_SERVER_URL.replace('http://', '').split(':')[0] }}
+                  </div>
                 </v-form>
               </v-card-text>
               <v-card-actions class="pb-4 px-4">

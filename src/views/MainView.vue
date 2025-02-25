@@ -44,7 +44,13 @@
       <v-divider></v-divider>
 
       <v-list density="compact" nav>
-        <v-list-item prepend-icon="mdi-account-group" title="Пользователи" value="people"></v-list-item>
+        <v-list-item 
+          prepend-icon="mdi-account-group" 
+          title="Пользователи" 
+          value="people"
+          active
+          color="primary"
+        ></v-list-item>
         <v-list-item 
           prepend-icon="mdi-logout" 
           title="Выйти"
@@ -213,10 +219,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/AuthService'
 import PersonRow from '../components/PersonRow.vue'
+import defaultClient from '../services/ISIMClient'
 
 const router = useRouter()
 const drawer = ref(true)
@@ -234,6 +241,7 @@ const loadingAccounts = ref({})
 const showColumnsMenu = ref(false)
 const showAccountColumnsMenu = ref(false)
 const services = ref({})
+const roleMapping = ref({})
 
 // Define all possible attributes with Russian titles
 const allAttributes = [
@@ -477,6 +485,39 @@ async function loadServices() {
   }
 }
 
+async function loadRoleMapping() {
+  try {
+    // Ensure we're authenticated
+    if (!defaultClient.token.jsession || !defaultClient.token.ltpa2) {
+      console.log('No auth tokens found, reconnecting...');
+      await defaultClient.connect();
+    }
+    
+    const allRoles = await defaultClient.getAllRoles();
+    
+    // Process each role to create the mapping
+    for (const role of allRoles) {
+      // Extract roleId from the href
+      const match = role.href?.match(/\/roles\/([^?]+)/);
+      const roleId = match ? match[1] : null;
+      
+      if (roleId) {
+        try {
+          const roleDetails = await defaultClient.getRole(roleId);
+          roleMapping.value[roleId] = roleDetails.title;
+        } catch (error) {
+          console.error(`Error fetching details for role ${roleId}:`, error);
+          roleMapping.value[roleId] = roleId; // Fallback to ID if fetch fails
+        }
+      }
+    }
+    
+    console.log('Role mapping created:', roleMapping.value);
+  } catch (error) {
+    console.error('Error creating role mapping:', error);
+  }
+}
+
 async function loadPeople() {
   if (loading.value) return;
 
@@ -521,6 +562,9 @@ async function getCurrentUser() {
   }
 }
 
+// Provide the role mapping to child components
+provide('roleMapping', roleMapping)
+
 // Load people automatically when the component is mounted
 onMounted(async () => {
   if (!AuthService.isAuthenticated()) {
@@ -528,9 +572,15 @@ onMounted(async () => {
     return
   }
   
-  await getCurrentUser()
-  await loadServices()
-  await loadPeople()
+  try {
+    // First ensure we're connected
+    await defaultClient.connect();
+    await loadRoleMapping(); // Load role mapping first
+    await loadPeople();
+    await loadServices();
+  } catch (error) {
+    console.error('Error loading initial data:', error);
+  }
 })
 </script>
 

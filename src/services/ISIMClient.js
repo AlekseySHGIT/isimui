@@ -605,6 +605,63 @@ export class ISIMClient {
         }
     }
 
+    async getRole(roleId) {
+        try {
+            const response = await fetch(`${this.baseURI}/itim/rest/roles/${roleId}?attributes=*`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': this.token.csrf
+                },
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch role: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            return {
+                id: roleId,
+                title: data._attributes?.errolename || data._attributes?.title || roleId
+            };
+        } catch (error) {
+            console.error('Error fetching role:', error);
+            throw error;
+        }
+    }
+
+
+    async getAllRoles() {
+        console.log('Retrieving roles...');
+        const url = '/rest/roles';
+        this.onLog('Roles', url, 'pending');
+        
+        try {
+            const response = await this.makeRequest(url, {
+                rawPath: true,
+                method: 'GET'
+            });
+            
+            this.onLog('Roles', url, 'success');
+            // Check if response is an array directly
+            if (Array.isArray(response)) {
+                return response;
+            }
+            // Try different possible response structures
+            return response._embedded?.roles || 
+                   response.roles || 
+                   response._embedded || 
+                   [];
+        } catch (error) {
+            this.onLog('Roles', url, 'error', error);
+            return [];
+        }
+    }
+
+   
+
 }
 
 // Get stored credentials if they exist
