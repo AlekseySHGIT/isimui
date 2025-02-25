@@ -181,7 +181,10 @@
           
           <v-card-text class="pa-4">
             <v-data-table
-              :headers="[{ title: '', key: 'expand', sortable: false, width: '48px' }, ...headers]"
+              :headers="[
+                { title: '', key: 'expand', sortable: false, width: '48px', align: 'start' },
+                ...headers.map(h => ({ ...h, align: 'start' }))
+              ]"
               :items="people"
               :search="search"
               :loading="loading"
@@ -190,7 +193,7 @@
               density="comfortable"
               hover
               height="calc(100vh - 140px)"
-              class="elevation-1"
+              class="elevation-1 table-fixed-layout"
               @update:options="handleTableOptionsUpdate"
             >
               <template #[`item`]="{ item }">
@@ -255,8 +258,7 @@ const allAttributes = [
   { title: 'Регион', value: 'st' },
   { title: 'Улица', value: 'street' },
   { title: 'Описание', value: 'description' },
-  { title: 'Аудио', value: 'audio' },
-  { title: 'Статус', value: 'status' }
+  { title: 'Аудио', value: 'audio' }
 ]
 
 const allAccountAttributes = [
@@ -267,7 +269,7 @@ const allAccountAttributes = [
   { title: 'Статус', value: 'eraccountstatus' },
   { title: 'Последний доступ', value: 'erlastaccessdate' },
   { title: 'Владелец', value: 'owner' },
-  { title: 'Тип владения', value: 'eraccountownershiptype' },
+ 
   { title: 'Дата создания', value: 'ercreatedate' },
   { title: 'Дата изменения', value: 'ermodifydate' },
   { title: 'Дата удаления', value: 'erdeletedate' },
@@ -287,7 +289,7 @@ const allAccountAttributes = [
   { title: 'Идентификатор типа владения', value: 'eraccountownershiptypeid' }
 ]
 
-const defaultColumns = ['cn', 'mail', 'sn', 'status', 'description']
+const defaultColumns = ['cn', 'mail', 'sn', 'description']
 const defaultAccountAttributes = [
   'eruid',
   'adisplayname',
@@ -296,7 +298,7 @@ const defaultAccountAttributes = [
   'eraccountstatus',
   'eraccountcompliance',
   'erlastaccessdate',
-  'eraccountownershiptype'
+  
 ]
 
 const selectedAttributes = ref(defaultColumns)
@@ -556,5 +558,36 @@ onMounted(async () => {
 
 .v-data-table-header__content {
   white-space: nowrap;
+}
+
+.table-fixed-layout {
+  table-layout: fixed !important;
+}
+
+.table-fixed-layout :deep(table) {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+.table-fixed-layout :deep(th),
+.table-fixed-layout :deep(td) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 8px 16px !important;
+}
+
+.table-fixed-layout :deep(th:first-child),
+.table-fixed-layout :deep(td:first-child) {
+  padding: 0 4px !important;
+  width: 48px !important;
+}
+
+.v-data-table__wrapper {
+  overflow-x: auto !important;
+}
+
+.v-data-table-header__content {
+  justify-content: flex-start !important;
 }
 </style>

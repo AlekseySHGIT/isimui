@@ -9,7 +9,7 @@
         @click="toggleExpand"
       ></v-btn>
     </td>
-    <td v-for="header in headers" :key="header.key" :style="{ width: getColumnWidth(header.key) }">
+    <td v-for="header in headers" :key="header.key" :style="{ width: getColumnWidth(header.key), maxWidth: getColumnWidth(header.key) }">
       <template v-if="header.key === 'cn'">
         {{ person._attributes?.cn || '-' }}
       </template>
@@ -26,10 +26,19 @@
         {{ person._attributes?.description || '-' }}
       </template>
       <template v-else-if="header.key === 'audio'">
-        <v-chip v-if="person._attributes?.audio" color="primary" size="small">
-          MY.AUDIO
-        </v-chip>
-        <span v-else>-</span>
+        <div class="d-flex align-center" style="min-height: 32px; width: 100%; padding: 0">
+          <v-chip
+            v-if="person._attributes?.audio"
+            color="primary"
+            size="small"
+            variant="flat"
+            class="font-weight-medium ma-0"
+            style="min-width: 70px"
+          >
+            MY.AUDIO
+          </v-chip>
+          <span v-else class="text-disabled">-</span>
+        </div>
       </template>
       <template v-else>
         <template v-if="header.key.toLowerCase().includes('date')">
@@ -86,19 +95,19 @@
                     v-if="account[attr] === '2'"
                     color="error"
                     icon="mdi-alert-circle"
-                    size="small"
+                    size="large"
                   />
                   <v-icon
                     v-else-if="account[attr] === '3'"
                     color="warning"
                     icon="mdi-alert"
-                    size="small"
+                    size="large"
                   />
                   <v-icon
                     v-else-if="account[attr] === '1'"
                     color="success"
                     icon="mdi-check-circle"
-                    size="small"
+                    size="large"
                   />
                 </template>
                 <template v-else-if="attr.toLowerCase().includes('date')">
@@ -223,6 +232,14 @@ const formattedAccounts = computed(() => {
   });
 });
 
+const hasNonCompliantAccount = computed(() => {
+  if (!accounts.value) return false;
+  return accounts.value.some(account => {
+    const compliance = account._attributes?.eraccountcompliance;
+    return compliance === '2' || compliance === '3';
+  });
+});
+
 function getAccountAttributeTitle(attr) {
   const titles = {
     eruid: 'ID пользователя',
@@ -232,21 +249,21 @@ function getAccountAttributeTitle(attr) {
     eraccountstatus: 'Статус',
     eraccountcompliance: 'Состояние',
     erlastaccessdate: 'Последний доступ',
-    eraccountownershiptype: 'Тип владения'
+  
   }
   return titles[attr] || attr
 }
 
 function getColumnWidth(key) {
   const widths = {
+    'expand': '48px',
     'cn': '200px',
     'mail': '250px',
     'sn': '200px',
-    'status': '120px',
     'description': '300px',
-    'audio': '100px'
+    'audio': '90px'
   }
-  return widths[key] || 'auto'
+  return widths[key] || '150px'
 }
 
 function formatDate(dateString) {
@@ -287,20 +304,44 @@ function toggleExpand() {
 <style scoped>
 .rotate-180 {
   transform: rotate(180deg);
-  transition: transform 0.2s;
 }
 
-.accounts-table {
-  overflow-x: auto;
-  width: 100%;
+td {
+  padding: 8px 16px !important;
+  vertical-align: middle !important;
+  height: 48px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
 }
 
-:deep(.v-table) {
-  width: 100%;
-  table-layout: fixed;
+td:last-child {
+  padding: 8px 8px !important;
+  text-align: left;
 }
 
-:deep(.v-table__wrapper) {
-  overflow-x: hidden;
+.v-chip {
+  margin: 0 !important;
+}
+
+.v-data-table-header th {
+  font-weight: 500 !important;
+  color: rgba(0, 0, 0, 0.87) !important;
+  background-color: #f5f5f5 !important;
+}
+
+.v-data-table {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+.v-data-table > .v-data-table__wrapper > table > tbody > tr:hover > td {
+  background-color: #f5f5f5 !important;
+}
+
+.v-data-table__wrapper {
+  overflow-x: auto !important;
 }
 </style>
