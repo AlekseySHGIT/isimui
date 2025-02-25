@@ -258,6 +258,7 @@ const allAttributes = [
   { title: 'Регион', value: 'st' },
   { title: 'Улица', value: 'street' },
   { title: 'Описание', value: 'description' },
+  { title: 'Дата создания', value: 'ercreatedate' },
   { title: 'Аудио', value: 'audio' }
 ]
 
@@ -289,7 +290,7 @@ const allAccountAttributes = [
   { title: 'Идентификатор типа владения', value: 'eraccountownershiptypeid' }
 ]
 
-const defaultColumns = ['cn', 'mail', 'sn', 'description']
+const defaultColumns = ['cn', 'mail', 'ercreatedate', 'sn', 'description']
 const defaultAccountAttributes = [
   'eruid',
   'adisplayname',

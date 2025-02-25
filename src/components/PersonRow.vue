@@ -40,6 +40,9 @@
           <span v-else class="text-disabled">-</span>
         </div>
       </template>
+      <template v-else-if="header.key === 'ercreatedate'">
+        {{ formatDate(person._attributes?.ercreatedate) }}
+      </template>
       <template v-else>
         <template v-if="header.key.toLowerCase().includes('date')">
           {{ formatDate(person._attributes?.[header.key]) }}
@@ -80,7 +83,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(account, index) in formattedAccounts" :key="account.eruid" :class="index % 2 === 0 ? 'bg-grey-lighten-5' : ''">
+            <tr v-for="(account, index) in formattedAccounts" 
+                :key="account.eruid" 
+                :class="[
+                  index % 2 === 0 ? 'bg-grey-lighten-5' : '',
+                  'account-row',
+                  { 'selected-account': selectedAccount?.eruid === account.eruid }
+                ]"
+                @click="showAccountGroups(account)"
+                style="cursor: pointer"
+            >
               <td v-for="attr in props.selectedAccountAttributes" :key="attr">
                 <template v-if="attr === 'eraccountstatus'">
                   <v-chip
@@ -150,6 +162,49 @@
       </v-card>
     </td>
   </tr>
+
+  <!-- Groups Navigation Drawer -->
+  <v-navigation-drawer
+    v-model="showGroups"
+    location="right"
+    temporary
+    width="400"
+    class="groups-drawer"
+    elevation="2"
+  >
+    <v-toolbar color="blue-lighten-5" class="px-4 border-b">
+      <v-toolbar-title class="text-primary d-flex align-center text-body-1">
+        <v-icon icon="mdi-account-group" class="mr-2" color="primary"></v-icon>
+        Группы пользователя
+      </v-toolbar-title>
+      <v-spacer></v-spacer>
+      <v-btn icon="mdi-close" variant="text" @click="showGroups = false"></v-btn>
+    </v-toolbar>
+
+    <div class="pa-4">
+      <div class="d-flex align-center mb-4">
+        <v-icon icon="mdi-account" class="mr-2" color="primary" size="small"></v-icon>
+        <span class="text-body-2 text-medium-emphasis">{{ selectedAccount?._attributes?.eruid }}</span>
+      </div>
+
+      <template v-if="selectedAccount?._attributes?.ergroup?.length">
+        <div 
+          v-for="(group, index) in selectedAccount._attributes.ergroup" 
+          :key="index"
+          class="group-item mb-2 pa-3 rounded-lg"
+        >
+          <div class="d-flex align-center mb-1">
+            <v-icon icon="mdi-folder-account" color="primary" size="small" class="mr-2"></v-icon>
+            <span class="text-subtitle-2">{{ group }}</span>
+          </div>
+        </div>
+      </template>
+      <v-card-text v-else class="text-center text-grey-darken-1">
+        <v-icon icon="mdi-account-group-off" size="large" class="mb-2"></v-icon>
+        <div>Нет групп</div>
+      </v-card-text>
+    </div>
+  </v-navigation-drawer>
 </template>
 
 <script setup>
@@ -178,6 +233,8 @@ const props = defineProps({
 const expanded = ref(false)
 const loading = ref(false)
 const accounts = ref(null)
+const showGroups = ref(false)
+const selectedAccount = ref(null)
 
 function extractPersonId(href) {
   if (!href) return null;
@@ -282,7 +339,7 @@ function getColumnWidth(key) {
 }
 
 function formatDate(dateString) {
-  if (!dateString) return '-';
+  if (!dateString) return '';
   try {
     // Parse date in format YYYYMMDDHHMMZ
     const year = dateString.substring(0, 4);
@@ -293,15 +350,15 @@ function formatDate(dateString) {
     
     const date = new Date(year, month - 1, day, hour, minute);
     return new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
       year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
     }).format(date);
   } catch (e) {
-    console.error('Error formatting date:', e);
+    console.error('Error formatting date:', e, dateString);
     return dateString;
   }
 }
@@ -322,6 +379,34 @@ function getComplianceStatus(value) {
     '3': 'Несоответствие'
   }
   return statuses[value] || 'Неизвестно'
+}
+
+function showAccountGroups(account) {
+  console.log('Selected account:', account);
+  console.log('Account attributes:', account._attributes);
+  
+  // Make sure we're properly handling the groups
+  const groups = account._attributes?.ergroup;
+  console.log('Groups:', groups);
+  
+  selectedAccount.value = {
+    ...account,
+    _attributes: {
+      ...account._attributes,
+      ergroup: groups
+    }
+  };
+  showGroups.value = true;
+}
+
+function getGroupName(groupDN) {
+  const match = groupDN.match(/CN=([^,]+)/)
+  return match ? match[1] : groupDN
+}
+
+function getGroupPath(groupDN) {
+  const ous = groupDN.match(/OU=[^,]+/g)
+  return ous ? ous.map(ou => ou.replace('OU=', '')).join(' → ') : ''
 }
 </script>
 
@@ -369,5 +454,46 @@ td {
 
 .v-chip {
   font-weight: 500 !important;
+}
+
+.account-row {
+  transition: background-color 0.2s;
+}
+
+.account-row:hover {
+  background-color: rgb(var(--v-theme-primary-lighten-5)) !important;
+}
+
+.selected-account {
+  background-color: rgb(var(--v-theme-primary-lighten-4)) !important;
+}
+
+.v-list-item {
+  border: 1px solid rgba(var(--v-theme-primary), 0.1);
+}
+
+.groups-drawer {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.groups-drawer::v-deep .v-navigation-drawer__content {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.group-item {
+  background-color: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-primary), 0.1);
+  transition: all 0.2s ease;
+}
+
+.group-item:hover {
+  background-color: rgb(var(--v-theme-primary-lighten-5));
+  border-color: rgba(var(--v-theme-primary), 0.2);
+}
+
+/* Ensure the drawer appears above other content */
+.v-navigation-drawer {
+  z-index: 1000 !important;
 }
 </style>
