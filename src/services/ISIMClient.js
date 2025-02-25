@@ -372,7 +372,7 @@ export class ISIMClient {
             }
         });
 
-        // Transform the response to include erservice href from _links
+        // Transform the response to include erservice href from _links and handle groups
         if (Array.isArray(response)) {
             return response.map(account => {
                 const erserviceHref = account._links?.erservice?.href;
@@ -384,8 +384,13 @@ export class ISIMClient {
                         erserviceId = match[1];
                     }
                 }
+
+                // Get groups from _attributes
+                const groups = account._attributes?.ergroup;
+                
                 return {
                     ...account,
+                    ergroup: groups, // Add groups at top level for easy access
                     _links: {
                         ...account._links,
                         erservice: {
@@ -397,6 +402,25 @@ export class ISIMClient {
             });
         }
         return response;
+    }
+
+    async getAccountGroups(accountHref) {
+        if (!accountHref) return [];
+        try {
+            const response = await this.makeRequest(`${accountHref}/groups`, {
+                headers: {
+                    'Accept': '*/*'
+                }
+            });
+            
+            if (response._embedded?.groups) {
+                return response._embedded.groups;
+            }
+            return Array.isArray(response) ? response : [];
+        } catch (error) {
+            console.error('Failed to get account groups:', error);
+            return [];
+        }
     }
 
     async makeRequest(path, options = {}) {

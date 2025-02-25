@@ -174,8 +174,8 @@
   >
     <v-toolbar color="blue-lighten-5" class="px-4 border-b">
       <v-toolbar-title class="text-primary d-flex align-center text-body-1">
-        <v-icon icon="mdi-account-group" class="mr-2" color="primary"></v-icon>
-        Группы пользователя
+       
+        Группы 
       </v-toolbar-title>
       <v-spacer></v-spacer>
       <v-btn icon="mdi-close" variant="text" @click="showGroups = false"></v-btn>
@@ -184,18 +184,21 @@
     <div class="pa-4">
       <div class="d-flex align-center mb-4">
         <v-icon icon="mdi-account" class="mr-2" color="primary" size="small"></v-icon>
-        <span class="text-body-2 text-medium-emphasis">{{ selectedAccount?._attributes?.eruid }}</span>
+        <span class="text-body-2 text-medium-emphasis">{{ selectedAccount?.eruid }}</span>
       </div>
 
-      <template v-if="selectedAccount?._attributes?.ergroup?.length">
+      <template v-if="accountGroups.length">
         <div 
-          v-for="(group, index) in selectedAccount._attributes.ergroup" 
+          v-for="(group, index) in accountGroups" 
           :key="index"
           class="group-item mb-2 pa-3 rounded-lg"
         >
           <div class="d-flex align-center mb-1">
             <v-icon icon="mdi-folder-account" color="primary" size="small" class="mr-2"></v-icon>
-            <span class="text-subtitle-2">{{ group }}</span>
+            <span class="text-subtitle-2">{{ getGroupName(group) }}</span>
+          </div>
+          <div class="text-caption text-medium-emphasis">
+            {{ getGroupPath(group) }}
           </div>
         </div>
       </template>
@@ -210,6 +213,10 @@
 <script setup>
 import { ref, computed } from 'vue'
 import AuthService from '../services/AuthService'
+
+const showGroups = ref(false)
+const accountGroups = ref([])
+const selectedAccount = ref(null)
 
 const props = defineProps({
   person: {
@@ -232,9 +239,8 @@ const props = defineProps({
 
 const expanded = ref(false)
 const loading = ref(false)
+const loadingGroups = ref(false)
 const accounts = ref(null)
-const showGroups = ref(false)
-const selectedAccount = ref(null)
 
 function extractPersonId(href) {
   if (!href) return null;
@@ -290,7 +296,9 @@ const formattedAccounts = computed(() => {
   if (!accounts.value) return [];
   return accounts.value.map(account => {
     console.log('Processing account:', account);
-    const formatted = {};
+    const formatted = {
+      _attributes: account._attributes // Keep the original _attributes
+    };
     props.selectedAccountAttributes.forEach(attr => {
       if (attr === 'erservice') {
         // Get service ID from _links.erservice.id that we added in ISIMClient
@@ -382,31 +390,36 @@ function getComplianceStatus(value) {
 }
 
 function showAccountGroups(account) {
-  console.log('Selected account:', account);
-  console.log('Account attributes:', account._attributes);
+  console.log('Opening groups for account:', account);
   
-  // Make sure we're properly handling the groups
+  // Get groups from account attributes
   const groups = account._attributes?.ergroup;
-  console.log('Groups:', groups);
+  console.log('Groups from account:', groups);
   
-  selectedAccount.value = {
-    ...account,
-    _attributes: {
-      ...account._attributes,
-      ergroup: groups
-    }
-  };
+  if (!groups) {
+    accountGroups.value = [];
+    console.log('No groups found for this account');
+    return;
+  }
+  
+  selectedAccount.value = account._attributes;
+  
+  // Convert to array if it's a single item
+  accountGroups.value = Array.isArray(groups) ? groups : [groups];
+  
   showGroups.value = true;
 }
 
 function getGroupName(groupDN) {
-  const match = groupDN.match(/CN=([^,]+)/)
-  return match ? match[1] : groupDN
+  if (!groupDN) return '';
+  const match = groupDN.match(/CN=([^,]+)/);
+  return match ? match[1] : groupDN;
 }
 
 function getGroupPath(groupDN) {
-  const ous = groupDN.match(/OU=[^,]+/g)
-  return ous ? ous.map(ou => ou.replace('OU=', '')).join(' → ') : ''
+  if (!groupDN) return '';
+  const ous = groupDN.match(/OU=([^,]+)/g);
+  return ous ? ous.map(ou => ou.replace('OU=', '')).join(' → ') : '';
 }
 </script>
 
