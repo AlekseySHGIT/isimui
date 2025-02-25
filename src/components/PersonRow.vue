@@ -53,13 +53,23 @@
   <tr v-if="expanded">
     <td :colspan="headers.length + 1" class="pa-0">
       <v-card flat class="mx-2 my-1">
+        <!-- <v-card-title class="text-subtitle-2 py-2 px-4 bg-grey-lighten-4 d-flex align-center">
+          <span class="text-grey-darken-3">PersonID:</span>
+          <v-chip
+            class="ml-2"
+            size="small"
+            variant="outlined"
+            color="primary"
+          >
+            {{ extractPersonId(props.person._links?.self?.href) }}
+          </v-chip>
+        </v-card-title> -->
         <div v-if="loading" class="d-flex justify-center pa-4">
           <v-progress-circular indeterminate></v-progress-circular>
         </div>
         <v-table
           v-if="formattedAccounts?.length"
           density="comfortable"
-          hover
           class="accounts-table"
         >
           <thead>
@@ -70,40 +80,56 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="account in formattedAccounts" :key="account.eruid">
-              <td v-for="attr in props.selectedAccountAttributes" :key="attr" class="bg-grey-lighten-5">
+            <tr v-for="(account, index) in formattedAccounts" :key="account.eruid" :class="index % 2 === 0 ? 'bg-grey-lighten-5' : ''">
+              <td v-for="attr in props.selectedAccountAttributes" :key="attr">
                 <template v-if="attr === 'eraccountstatus'">
                   <v-chip
                     size="small"
                     :color="account[attr] === '0' ? 'success' : 'error'"
                     :text="account[attr] === '0' ? 'Активен' : 'Неактивен'"
+                    variant="elevated"
+                    class="font-weight-medium"
                   ></v-chip>
                 </template>
                 <template v-else-if="attr === 'eraccountcompliance'">
-                  <v-icon
-                    v-if="account[attr] === '2'"
-                    color="error"
-                    icon="mdi-alert-circle"
-                    size="large"
-                  />
-                  <v-icon
-                    v-else-if="account[attr] === '3'"
-                    color="warning"
-                    icon="mdi-alert"
-                    size="large"
-                  />
-                  <v-icon
-                    v-else-if="account[attr] === '1'"
-                    color="success"
-                    icon="mdi-check-circle"
-                    size="large"
-                  />
+                  <v-tooltip :text="getComplianceStatus(account[attr])" location="top">
+                    <template v-slot:activator="{ props }">
+                      <v-icon
+                        v-bind="props"
+                        v-if="account[attr] === '2'"
+                        color="error"
+                        icon="mdi-alert-circle"
+                        size="large"
+                      />
+                      <v-icon
+                        v-bind="props"
+                        v-else-if="account[attr] === '3'"
+                        color="warning"
+                        icon="mdi-alert"
+                        size="large"
+                      />
+                      <v-icon
+                        v-bind="props"
+                        v-else-if="account[attr] === '1'"
+                        color="success"
+                        icon="mdi-check-circle"
+                        size="large"
+                      />
+                    </template>
+                  </v-tooltip>
                 </template>
                 <template v-else-if="attr.toLowerCase().includes('date')">
                   {{ formatDate(account[attr]) }}
                 </template>
                 <template v-else>
-                  {{ account[attr] || '-' }}
+                  <v-tooltip :text="account[attr] || '-'" location="top" v-if="account[attr]?.length > 30">
+                    <template v-slot:activator="{ props }">
+                      <span v-bind="props" class="text-truncate d-inline-block" style="max-width: 250px">
+                        {{ account[attr] }}
+                      </span>
+                    </template>
+                  </v-tooltip>
+                  <span v-else>{{ account[attr] || '-' }}</span>
                 </template>
               </td>
             </tr>
@@ -288,6 +314,15 @@ function toggleExpand() {
     accounts.value = null;
   }
 }
+
+function getComplianceStatus(value) {
+  const statuses = {
+    '1': 'Соответствует',
+    '2': 'Критическое несоответствие',
+    '3': 'Несоответствие'
+  }
+  return statuses[value] || 'Неизвестно'
+}
 </script>
 
 <style scoped>
@@ -305,28 +340,20 @@ td {
   max-width: 0;
 }
 
-td:last-child {
-  padding: 8px 8px !important;
-  text-align: left;
-}
-
-.v-chip {
-  margin: 0 !important;
-}
-
-/* Account table styles */
 .accounts-table {
   border: 1px solid rgba(0, 0, 0, 0.12) !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  background: white !important;
 }
 
 .accounts-table :deep(th) {
   font-weight: 500 !important;
+  padding: 12px 16px !important;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.12) !important;
   color: rgba(0, 0, 0, 0.87) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
 }
 
 .accounts-table :deep(td) {
+  padding: 12px 16px !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
@@ -334,17 +361,13 @@ td:last-child {
   border-bottom: none !important;
 }
 
-.accounts-table :deep(tr:hover td) {
-  background-color: rgb(var(--v-theme-primary-lighten-5)) !important;
+.text-truncate {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.v-data-table {
-  border: 1px solid rgba(0, 0, 0, 0.12) !important;
-  table-layout: fixed !important;
-  width: 100% !important;
-}
-
-.v-data-table__wrapper {
-  overflow-x: auto !important;
+.v-chip {
+  font-weight: 500 !important;
 }
 </style>
