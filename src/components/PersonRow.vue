@@ -71,7 +71,7 @@
           <v-progress-circular indeterminate></v-progress-circular>
         </div>
         <v-table
-          v-if="formattedAccounts?.length"
+          v-else-if="formattedAccounts?.length"
           density="comfortable"
           class="accounts-table"
         >
@@ -147,9 +147,9 @@
             </tr>
           </tbody>
         </v-table>
-        <v-card-text v-else-if="!loading" class="text-center text-grey">
+        <v-card-text v-else-if="!loading && accounts" class="text-center text-grey">
           <v-icon icon="mdi-account-off" size="large" class="mb-2"></v-icon>
-          <div>Нет учетных записей</div>
+          <div>У пользователя нет учетных записей</div>
         </v-card-text>
         <v-alert
           v-else

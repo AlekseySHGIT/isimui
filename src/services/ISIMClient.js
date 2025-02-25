@@ -1,3 +1,5 @@
+import { DEFAULT_SERVER_URL } from '../config'
+
 export class ISIMClient {
     constructor(config = {}) {
         this.baseURI = config.baseURI?.replace(/\/$/, '') || ''; // Remove trailing slash if present
@@ -626,9 +628,9 @@ const { username, password } = getUserCredentials();
 
 // Create and export a default instance
 const defaultClient = new ISIMClient({
-    baseURI: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+    baseURI: DEFAULT_SERVER_URL,
     onLog: (component, message, status) => {
-        console.log(`[${component}] ${message} - ${status}`);
+        console.log(`[${component}] ${message}`, status);
     }
 });
 

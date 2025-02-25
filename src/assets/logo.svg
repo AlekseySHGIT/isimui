@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="50" viewBox="0 0 200 50" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .text { font-family: Arial, sans-serif; font-weight: bold; }
+    .isim { fill: #00000; }
+    .ui { fill: #424242; }
+  </style>
+  <text x="50" y="35" class="text isim" font-size="32">ISIM</text>
+  <text x="130" y="35" class="text ui" font-size="32">UI</text>
+</svg>

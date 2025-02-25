@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
+import { REMOTE_SERVER_URL } from './src/config'
+
+// Remove protocol and port from URL
+const remoteServerUrl = REMOTE_SERVER_URL.replace(/^https?:\/\//, '').replace(/:\d+$/, '')
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -11,7 +15,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/itim': {
-        target: 'http://192.168.1.204:9080',
+        target: REMOTE_SERVER_URL,
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
@@ -57,7 +61,7 @@ export default defineConfig({
         }
       },
       '/itim/rest/systemusers': {
-        target: 'http://192.168.1.204:9080',
+        target: REMOTE_SERVER_URL,
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {
@@ -70,7 +74,7 @@ export default defineConfig({
         }
       },
       '/itim/rest/people': {
-        target: 'http://192.168.1.204:9080',
+        target: REMOTE_SERVER_URL,
         changeOrigin: true,
         secure: false,
         configure: (proxy, options) => {
