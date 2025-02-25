@@ -53,17 +53,6 @@
   <tr v-if="expanded">
     <td :colspan="headers.length + 1" class="pa-0">
       <v-card flat class="mx-2 my-1">
-        <!-- <v-card-title class="text-subtitle-2 py-2 px-4 bg-grey-lighten-4 d-flex align-center">
-          <span class="text-grey-darken-3">PersonID:</span>
-          <v-chip
-            class="ml-2"
-            size="small"
-            variant="outlined"
-            color="primary"
-          >
-            {{ extractPersonId(props.person._links?.self?.href) }}
-          </v-chip>
-        </v-card-title> -->
         <div v-if="loading" class="d-flex justify-center pa-4">
           <v-progress-circular indeterminate></v-progress-circular>
         </div>
@@ -75,14 +64,14 @@
         >
           <thead>
             <tr>
-              <th v-for="attr in props.selectedAccountAttributes" :key="attr" class="text-subtitle-2">
+              <th v-for="attr in props.selectedAccountAttributes" :key="attr" class="text-subtitle-2 bg-blue-lighten-5">
                 {{ getAccountAttributeTitle(attr) }}
               </th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="account in formattedAccounts" :key="account.eruid">
-              <td v-for="attr in props.selectedAccountAttributes" :key="attr">
+              <td v-for="attr in props.selectedAccountAttributes" :key="attr" class="bg-grey-lighten-5">
                 <template v-if="attr === 'eraccountstatus'">
                   <v-chip
                     size="small"
@@ -325,20 +314,34 @@ td:last-child {
   margin: 0 !important;
 }
 
-.v-data-table-header th {
+/* Account table styles */
+.accounts-table {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+}
+
+.accounts-table :deep(th) {
   font-weight: 500 !important;
   color: rgba(0, 0, 0, 0.87) !important;
-  background-color: #f5f5f5 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+.accounts-table :deep(td) {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+.accounts-table :deep(tr:last-child td) {
+  border-bottom: none !important;
+}
+
+.accounts-table :deep(tr:hover td) {
+  background-color: rgb(var(--v-theme-primary-lighten-5)) !important;
 }
 
 .v-data-table {
   border: 1px solid rgba(0, 0, 0, 0.12) !important;
   table-layout: fixed !important;
   width: 100% !important;
-}
-
-.v-data-table > .v-data-table__wrapper > table > tbody > tr:hover > td {
-  background-color: #f5f5f5 !important;
 }
 
 .v-data-table__wrapper {
