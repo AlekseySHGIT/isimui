@@ -14,9 +14,15 @@ class AuthService {
 
   async login(username, password) {
     try {
-      // Clear existing auth cookies first
-      document.cookie = 'LtpaToken2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
-      document.cookie = 'JSESSIONID=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+      // More thorough cookie clearing before login
+      const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
+      const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+      
+      cookiesToClear.forEach(cookieName => {
+        paths.forEach(path => {
+          document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+        });
+      });
       
       // Create a new ISIMClient instance for this login attempt
       this.isimClient = new ISIMClient({
@@ -47,9 +53,15 @@ class AuthService {
 
   async logout() {
     try {
-      // Clear LTPA2 cookie
-      document.cookie = 'LtpaToken2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
-      document.cookie = 'JSESSIONID=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+      // More thorough cookie clearing during logout
+      const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
+      const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+      
+      cookiesToClear.forEach(cookieName => {
+        paths.forEach(path => {
+          document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+        });
+      });
       
       // Clear local storage
       localStorage.removeItem('user')

@@ -85,6 +85,23 @@ export class AuthClient {
         this.onLog('Authentication', authUrl, 'pending');
         
         try {
+            // More thorough cookie clearing before authentication
+            const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
+            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+            
+            cookiesToClear.forEach(cookieName => {
+                paths.forEach(path => {
+                    document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+                });
+            });
+
+            // Also clear any other cookies
+            document.cookie.split(';').forEach(cookie => {
+                const name = cookie.split('=')[0].trim();
+                document.cookie = `${name}=; Path=/; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
+                document.cookie = `${name}=; Path=/itim; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
+            });
+
             const formData = new URLSearchParams();
             formData.append('j_username', this.username);
             formData.append('j_password', this.password);
@@ -95,7 +112,9 @@ export class AuthClient {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Cookie': this.token.jsession,
                     'Accept': '*/*',
-                    'Cache-Control': 'no-cache'
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
                 },
                 body: formData.toString(),
                 credentials: 'include',

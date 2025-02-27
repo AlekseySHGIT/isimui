@@ -41,24 +41,16 @@
                     variant="outlined"
                     color="primary"
                   />
-                  <v-select
+                  <v-text-field
                     v-model="serverUrl"
-                    :items="[
-                      { title: 'Локальный сервер', value: LOCAL_SERVER_URL },
-                      { title: 'Удаленный сервер', value: REMOTE_SERVER_URL }
-                    ]"
-                    item-title="title"
-                    item-value="value"
-                    label="Сервер"
+                    label="IP адрес сервера"
+                    prepend-icon="mdi-server"
                     variant="outlined"
                     density="compact"
-                    hide-details
                     class="mb-3"
-                  ></v-select>
-                  
-                  <div v-if="serverUrl === REMOTE_SERVER_URL" class="text-caption text-grey-darken-1 mb-3">
-                    IP адрес: {{ REMOTE_SERVER_URL.replace('http://', '').split(':')[0] }}
-                  </div>
+                    :rules="[rules.required]"
+                    placeholder="192.168.1.204:9080"
+                  />
                 </v-form>
               </v-card-text>
               <v-card-actions class="pb-4 px-4">
@@ -95,21 +87,15 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/AuthService'
-import { LOCAL_SERVER_URL, REMOTE_SERVER_URL } from '../config'
 
 const router = useRouter()
 const form = ref(null)
 const username = ref('ITIM Manager')
 const password = ref('')
-const serverUrl = ref(LOCAL_SERVER_URL)
+const serverUrl = ref('http://192.168.1.204:9080')
 const loading = ref(false)
 const snackbar = ref(false)
 const errorMessage = ref('')
-
-const serverOptions = [
-  { title: 'Локальный сервер', value: LOCAL_SERVER_URL },
-  { title: 'Удаленный сервер', value: REMOTE_SERVER_URL }
-]
 
 const rules = {
   required: value => !!value || 'Обязательное поле'
@@ -118,11 +104,21 @@ const rules = {
 const handleLogin = async () => {
   if (!form.value?.validate()) return
 
+  // More thorough cookie clearing before login
+  const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
+  const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+  
+  cookiesToClear.forEach(cookieName => {
+    paths.forEach(path => {
+      document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+    });
+  });
+  
   loading.value = true
   snackbar.value = false
   
   try {
-    await AuthService.login(username.value, password.value, serverUrl.value)
+    await AuthService.login(username.value, password.value)
     router.push('/ui')
   } catch (error) {
     errorMessage.value = error.message
