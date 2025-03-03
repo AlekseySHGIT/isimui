@@ -30,8 +30,12 @@ export class ISIMClient {
         try {
             console.log('Starting authentication flow...');
             
-            // Clear LTPA token before starting authentication
-            this.clearLTPAToken();
+            // Clear LTPA token before starting authentication and wait for confirmation
+            console.log('Clearing LTPA token before authentication...');
+            const ltpaCleared = await this.clearLTPAToken();
+            if (!ltpaCleared) {
+                console.warn('Warning: Could not confirm LTPA token was cleared');
+            }
             
             // 1. First get LTPA2 token - this establishes the main authentication
             const ltpa2Result = await this.retrieveLTPA2Cookie();
@@ -79,24 +83,76 @@ export class ISIMClient {
         }
     }
 
-    clearLTPAToken() {
-        console.log('=== Clearing LTPA Token ===');
-        const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
-        const domains = ['localhost', '192.168.1.204', '']; // Empty string for domain-less cookies
-        console.log('Current cookies before LTPA clearing:', document.cookie);
+    async clearLTPAToken() {
+        console.log('=== Starting LTPA Token Clearing Process ===');
         
-        domains.forEach(domain => {
-            paths.forEach(path => {
-                const clearString = `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
-                document.cookie = clearString;
-                console.log(`Cleared LtpaToken2 from path: ${path} and domain: ${domain || 'no domain'}`);
+        try {
+            // First try to invalidate the token from server side
+            console.log('Attempting to invalidate LTPA token from server...');
+            const logoutUrl = '/itim/restlogin/logout.jsp';
+            
+            try {
+                const response = await fetch(logoutUrl, {
+                    method: 'GET',
+                    credentials: 'include',
+                });
+                console.log('Logout response:', {
+                    status: response.status,
+                    ok: response.ok,
+                    headers: Array.from(response.headers.entries())
+                });
+            } catch (e) {
+                console.log('Logout request failed, continuing with cookie clearing:', e);
+            }
+
+            // Wait a bit after server request
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Now try to clear cookies on client side
+            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+            const domains = ['localhost', '192.168.1.204', ''];
+            
+            console.log('Current cookies before clearing:', document.cookie);
+            
+            // Try different cookie clearing approaches
+            domains.forEach(domain => {
+                paths.forEach(path => {
+                    // Try with all combinations of attributes
+                    [
+                        `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`,
+                        `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Max-Age=0; Secure; HttpOnly;`,
+                        `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Expires=Thu, 01 Jan 1970 00:00:01 GMT;`
+                    ].forEach(clearString => {
+                        document.cookie = clearString;
+                        console.log(`Attempted clear with: ${clearString}`);
+                    });
+                });
             });
-        });
-        
-        // Additional attempt to clear without specific attributes
-        document.cookie = 'LtpaToken2=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/;';
-        
-        console.log('Cookies after LTPA clearing:', document.cookie);
+
+            // Also try clearing with minimal attributes
+            document.cookie = 'LtpaToken2=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/;';
+            document.cookie = 'LtpaToken2=; max-age=0; path=/;';
+            
+            // Wait for cookies to update
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Check final state
+            console.log('Cookies after clearing attempts:', document.cookie);
+            const currentCookies = document.cookie.split(';').map(c => c.trim());
+            const ltpaExists = currentCookies.some(cookie => cookie.startsWith('LtpaToken2='));
+            
+            if (ltpaExists) {
+                console.warn('Warning: LTPA token still exists after all clearing attempts');
+                return false;
+            }
+            
+            console.log('Successfully cleared LTPA token');
+            return true;
+            
+        } catch (error) {
+            console.error('Error during LTPA token clearing:', error);
+            return false;
+        }
     }
 
     async retrieveJSessionCookie() {
