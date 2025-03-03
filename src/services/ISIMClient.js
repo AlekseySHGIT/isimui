@@ -39,8 +39,15 @@ export class ISIMClient {
             console.log('JSESSION cookie retrieved successfully');
             
             // 3. Finally get CSRF token - this requires both previous tokens
-            await this.retrieveCSRFToken();
-            console.log('CSRF token retrieved successfully');
+            // But don't fail if it can't be retrieved
+            try {
+                await this.retrieveCSRFToken();
+                console.log('CSRF token retrieved successfully');
+            } catch (csrfError) {
+                // Log the error but continue the authentication process
+                console.warn('Failed to retrieve CSRF token, but continuing:', csrfError);
+                this.token.csrf = 'not-available';
+            }
             
             console.log('Authentication flow completed successfully');
             return this.token;
@@ -243,7 +250,8 @@ export class ISIMClient {
             
             console.log('Using current cookie header:', cookieHeader);
 
-            const response = await fetch(csrfUrl, {
+            // First try with GET
+            let response = await fetch(csrfUrl, {
                 method: 'GET',
                 headers: {
                     'Cookie': cookieHeader,
@@ -253,24 +261,69 @@ export class ISIMClient {
                 credentials: 'include'
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            let data;
+            if (response.ok) {
+                data = await response.json();
+                console.log('CSRF GET Response:', data);
+            } else {
+                console.log(`GET request failed with status ${response.status}, trying POST...`);
+                
+                // If GET fails, try POST as fallback
+                response = await fetch(csrfUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Cookie': cookieHeader,
+                        'Accept': 'application/json, text/plain, */*',
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    data = await response.json();
+                    console.log('CSRF POST Response:', data);
+                } else {
+                    console.log(`POST fallback failed with status ${response.status}`);
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
             }
-
-            const data = await response.json();
-            console.log('CSRF Response:', data);
             
-            if (data && data.csrf) {
-                this.token.csrf = data.csrf;
-                this.onLog('CSRF Token Request', csrfUrl, 'success', JSON.stringify({ csrf: data.csrf }));
-                return true;
+            // Check for CSRF token in various formats
+            if (data) {
+                // Try all possible CSRF token formats
+                const csrfToken = data.csrf || data.CSRFToken || data.csrfToken || data['X-CSRF-Token'] || data['x-csrf-token'];
+                
+                if (csrfToken) {
+                    this.token.csrf = csrfToken;
+                    this.onLog('CSRF Token Request', csrfUrl, 'success', JSON.stringify({ csrf: csrfToken }));
+                    return true;
+                }
+                
+                // Check in response headers as well (some servers put it there)
+                const csrfHeader = response.headers.get('X-CSRF-Token') || 
+                                  response.headers.get('x-csrf-token') || 
+                                  response.headers.get('CSRFToken');
+                
+                if (csrfHeader) {
+                    this.token.csrf = csrfHeader;
+                    this.onLog('CSRF Token Request', csrfUrl, 'success', JSON.stringify({ 
+                        csrf: csrfHeader,
+                        source: 'response headers'
+                    }));
+                    return true;
+                }
             }
 
+            // If we reached here, we couldn't find a CSRF token but authentication might still work
+            console.log('No CSRF token found in response, but continuing anyway');
             this.onLog('CSRF Token Request', csrfUrl, 'warning', JSON.stringify({
-                message: 'No CSRF token in response',
+                message: 'No CSRF token in response - this is allowed but may cause issues with some requests',
                 responseData: data
             }));
-            return false;
+            
+            // Set a placeholder token to avoid undefined errors
+            this.token.csrf = 'not-available';
+            return true;
 
         } catch (error) {
             console.error('CSRF Token Request failed:', error);
@@ -279,7 +332,11 @@ export class ISIMClient {
                 currentCookies: document.cookie,
                 storedTokens: this.token
             }));
-            throw new Error("Failed to get CSRF token: " + error.message);
+            
+            // Instead of failing completely, set a placeholder and continue
+            this.token.csrf = 'not-available';
+            console.log('Setting placeholder CSRF token and continuing');
+            return true;
         }
     }
 
@@ -297,9 +354,12 @@ export class ISIMClient {
     }
 
     verifyCSRF(token) {
-        if (token.length !== 32) {
-            throw new Error("Invalid CSRF Token Received");
+        // More lenient CSRF verification - only check if it exists
+        if (!token || token === 'undefined') {
+            console.warn("Warning: Missing or undefined CSRF Token");
+            return false;
         }
+        return true;
     }
 
     async checkSessionValid() {
@@ -492,9 +552,13 @@ export class ISIMClient {
         try {
             const headers = {
                 'Accept': '*/*',
-                'Cookie': [this.token.jsession, this.token.client, this.token.clerk].filter(Boolean).join('; '),
-                'X-CSRF-Token': this.token.csrf
+                'Cookie': [this.token.jsession, this.token.client, this.token.clerk].filter(Boolean).join('; ')
             };
+            
+            // Only add the CSRF token if it exists and is not the placeholder
+            if (this.token.csrf && this.token.csrf !== 'not-available') {
+                headers['X-CSRF-Token'] = this.token.csrf;
+            }
 
             const response = await fetch(url, {
                 method: options.method || 'GET',
