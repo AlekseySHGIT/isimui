@@ -30,31 +30,73 @@ export class ISIMClient {
         try {
             console.log('Starting authentication flow...');
             
+            // Clear LTPA token before starting authentication
+            this.clearLTPAToken();
+            
             // 1. First get LTPA2 token - this establishes the main authentication
-            await this.retrieveLTPA2Cookie();
-            console.log('LTPA2 token retrieved successfully');
+            const ltpa2Result = await this.retrieveLTPA2Cookie();
+            console.log('LTPA2 token result:', {
+                success: !!ltpa2Result,
+                client: this.token.client ? 'Found' : 'Not found',
+                clerk: this.token.clerk ? 'Found' : 'Not found',
+                ltpa2: this.token.ltpa2 ? 'Found' : 'Not found'
+            });
             
             // 2. Then get JSESSION - this creates the session with the authenticated token
             await this.retrieveJSessionCookie();
-            console.log('JSESSION cookie retrieved successfully');
+            console.log('JSESSION result:', {
+                success: !!this.token.jsession,
+                jsession: this.token.jsession ? 'Found' : 'Not found',
+                value: this.token.jsession || 'Not set'
+            });
             
             // 3. Finally get CSRF token - this requires both previous tokens
             // But don't fail if it can't be retrieved
             try {
                 await this.retrieveCSRFToken();
-                console.log('CSRF token retrieved successfully');
+                console.log('CSRF token result:', {
+                    success: !!this.token.csrf,
+                    value: this.token.csrf || 'Not set'
+                });
             } catch (csrfError) {
                 // Log the error but continue the authentication process
                 console.warn('Failed to retrieve CSRF token, but continuing:', csrfError);
                 this.token.csrf = 'not-available';
             }
             
-            console.log('Authentication flow completed successfully');
+            console.log('Authentication flow completed. Final token state:', {
+                jsession: this.token.jsession ? 'Present' : 'Missing',
+                client: this.token.client ? 'Present' : 'Missing',
+                clerk: this.token.clerk ? 'Present' : 'Missing',
+                ltpa2: this.token.ltpa2 ? 'Present' : 'Missing',
+                csrf: this.token.csrf || 'not-available'
+            });
+            
             return this.token;
         } catch (error) {
             console.error('Authentication flow failed:', error);
             throw error;
         }
+    }
+
+    clearLTPAToken() {
+        console.log('=== Clearing LTPA Token ===');
+        const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+        const domains = ['localhost', '192.168.1.204', '']; // Empty string for domain-less cookies
+        console.log('Current cookies before LTPA clearing:', document.cookie);
+        
+        domains.forEach(domain => {
+            paths.forEach(path => {
+                const clearString = `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+                document.cookie = clearString;
+                console.log(`Cleared LtpaToken2 from path: ${path} and domain: ${domain || 'no domain'}`);
+            });
+        });
+        
+        // Additional attempt to clear without specific attributes
+        document.cookie = 'LtpaToken2=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/;';
+        
+        console.log('Cookies after LTPA clearing:', document.cookie);
     }
 
     async retrieveJSessionCookie() {
@@ -116,68 +158,95 @@ export class ISIMClient {
     async retrieveLTPA2Cookie() {
         const authUrl = '/itim/j_security_check';
         this.onLog('Authentication', authUrl, 'pending');
-        console.log('=== Starting Authentication Cookie Retrieval ===');
+        console.log('=== Starting LTPA2 Cookie Retrieval ===');
+        console.log('Target URL:', authUrl);
         
         try {
             // More thorough cookie clearing before authentication
             const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
             const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
             
-            console.log('Clearing existing cookies...');
+            console.log('=== Cookie Cleanup Phase ===');
+            console.log('Cookies to clear:', cookiesToClear);
+            console.log('Paths to clear from:', paths);
+            console.log('Cookies before clearing:', document.cookie);
+            
             cookiesToClear.forEach(cookieName => {
                 paths.forEach(path => {
-                    document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+                    const clearString = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+                    document.cookie = clearString;
+                    console.log(`Clearing cookie: ${cookieName} from path: ${path}`);
                 });
             });
 
-            console.log('Current cookies after clearing:', document.cookie);
+            console.log('Cookies after clearing:', document.cookie);
 
+            console.log('=== Authentication Request Phase ===');
             const formData = new URLSearchParams();
             formData.append('j_username', this.username);
             formData.append('j_password', this.password);
             
-            console.log('Sending login request with credentials:', {
+            console.log('Preparing authentication request:', {
+                url: authUrl,
                 username: this.username,
-                passwordLength: this.password ? this.password.length : 0
+                passwordLength: this.password ? this.password.length : 0,
+                method: 'POST',
+                mode: 'no-cors'
             });
+
+            const requestHeaders = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': '*/*',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            };
+            
+            console.log('Request headers:', requestHeaders);
 
             const response = await fetch(authUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': '*/*',
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                },
+                headers: requestHeaders,
                 body: formData.toString(),
                 credentials: 'include',
                 mode: 'no-cors'
             });
             
-            console.log('Login response received:', {
+            console.log('=== Authentication Response Phase ===');
+            console.log('Response received:', {
                 status: response.status,
-                type: response.type
+                type: response.type,
+                ok: response.ok,
+                headers: Array.from(response.headers.entries())
             });
             
             // Wait for cookies to be set
-            console.log('Waiting for cookies to be set...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const waitTime = 1000;
+            console.log(`Waiting ${waitTime}ms for cookies to be set...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
             
             // Get current cookies
+            console.log('=== Cookie Verification Phase ===');
             const currentCookies = document.cookie.split(';').map(c => c.trim());
-            console.log('All current cookies:', currentCookies);
+            console.log('All current cookies after authentication:', currentCookies);
             
             // Look for all possible auth cookies
             const clientCookie = currentCookies.find(c => c.startsWith('_client_wat='));
             const clerkCookie = currentCookies.find(c => c.startsWith('_clerk_db_jwt='));
             const ltpa2Cookie = currentCookies.find(c => c.startsWith('LtpaToken2='));
+            const jsessionCookie = currentCookies.find(c => c.startsWith('JSESSIONID='));
             
-            console.log('Found authentication cookies:', {
-                client: clientCookie || 'not found',
-                clerk: clerkCookie || 'not found',
-                ltpa2: ltpa2Cookie || 'not found'
+            console.log('Authentication cookie status:', {
+                client: clientCookie ? 'found' : 'not found',
+                clerk: clerkCookie ? 'found' : 'not found',
+                ltpa2: ltpa2Cookie ? 'found' : 'not found',
+                jsession: jsessionCookie ? 'found' : 'not found'
             });
+
+            if (clientCookie) console.log('Client cookie length:', clientCookie.length);
+            if (clerkCookie) console.log('Clerk cookie length:', clerkCookie.length);
+            if (ltpa2Cookie) console.log('LTPA2 cookie length:', ltpa2Cookie.length);
+            if (jsessionCookie) console.log('JSESSION cookie length:', jsessionCookie.length);
             
             if (!clientCookie && !clerkCookie && !ltpa2Cookie) {
                 console.log('=== No authentication cookies found ===');
