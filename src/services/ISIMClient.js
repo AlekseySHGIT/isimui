@@ -25,7 +25,7 @@ export class ISIMClient {
             throw new Error("Credentials not set in configuration");
         }
     }
-
+//23432
     async connect() {
         try {
             console.log('Starting authentication flow...');
