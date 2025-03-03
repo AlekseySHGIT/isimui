@@ -91,7 +91,7 @@ import AuthService from '../services/AuthService'
 const router = useRouter()
 const form = ref(null)
 const username = ref('ITIM Manager')
-const password = ref('')
+const password = ref('1q@3e4r')
 const serverUrl = ref('http://192.168.1.204:9080')
 const loading = ref(false)
 const snackbar = ref(false)
@@ -104,16 +104,9 @@ const rules = {
 const handleLogin = async () => {
   if (!form.value?.validate()) return
 
-  // More thorough cookie clearing before login
-  const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
-  const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
-  
-  cookiesToClear.forEach(cookieName => {
-    paths.forEach(path => {
-      document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
-    });
-  });
-  
+  // Clear existing LtpaToken2 cookie with all necessary attributes
+  document.cookie = 'LtpaToken2=; Path=/; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;'
+  document.cookie = 'LtpaToken2=; Path=/itim; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;'
   loading.value = true
   snackbar.value = false
   
