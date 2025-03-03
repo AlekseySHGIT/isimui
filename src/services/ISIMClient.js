@@ -109,36 +109,35 @@ export class ISIMClient {
     async retrieveLTPA2Cookie() {
         const authUrl = '/itim/j_security_check';
         this.onLog('Authentication', authUrl, 'pending');
+        console.log('=== Starting Authentication Cookie Retrieval ===');
         
         try {
             // More thorough cookie clearing before authentication
             const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
             const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
             
+            console.log('Clearing existing cookies...');
             cookiesToClear.forEach(cookieName => {
                 paths.forEach(path => {
                     document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
                 });
             });
 
-            // Also clear any other cookies
-            document.cookie.split(';').forEach(cookie => {
-                const name = cookie.split('=')[0].trim();
-                document.cookie = `${name}=; Path=/; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-                document.cookie = `${name}=; Path=/itim; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-            });
+            console.log('Current cookies after clearing:', document.cookie);
 
             const formData = new URLSearchParams();
             formData.append('j_username', this.username);
             formData.append('j_password', this.password);
             
-            console.log('Sending login request:', formData.toString());
+            console.log('Sending login request with credentials:', {
+                username: this.username,
+                passwordLength: this.password ? this.password.length : 0
+            });
 
             const response = await fetch(authUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Cookie': this.token.jsession,
                     'Accept': '*/*',
                     'Cache-Control': 'no-cache, no-store, must-revalidate',
                     'Pragma': 'no-cache',
@@ -149,58 +148,100 @@ export class ISIMClient {
                 mode: 'no-cors'
             });
             
-            console.log('retrieveLTPA2Cookie response:', response);
+            console.log('Login response received:', {
+                status: response.status,
+                type: response.type
+            });
             
-            // Wait a bit for cookies to be set
+            // Wait for cookies to be set
+            console.log('Waiting for cookies to be set...');
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Get all cookies
-            const cookies = document.cookie.split(';').map(cookie => cookie.trim());
-            console.log('All cookies after auth:', cookies);
+            // Get current cookies
+            const currentCookies = document.cookie.split(';').map(c => c.trim());
+            console.log('All current cookies:', currentCookies);
             
-            // Look for client and clerk cookies from the response
-            const clientCookie = cookies.find(cookie => cookie.includes('_client_wat'));
-            const clerkCookie = cookies.find(cookie => cookie.includes('_clerk_db_jwt'));
+            // Look for all possible auth cookies
+            const clientCookie = currentCookies.find(c => c.startsWith('_client_wat='));
+            const clerkCookie = currentCookies.find(c => c.startsWith('_clerk_db_jwt='));
+            const ltpa2Cookie = currentCookies.find(c => c.startsWith('LtpaToken2='));
             
-            if (clientCookie || clerkCookie) {
-                // Store these as our LTPA token equivalent
-                this.token.ltpa2 = [clientCookie, clerkCookie].filter(Boolean).join('; ');
-                console.log('Found auth cookies:', this.token.ltpa2);
-                this.onLog('Authentication', authUrl, 'success', JSON.stringify({ 
-                    cookies: {
-                        client: clientCookie,
-                        clerk: clerkCookie
-                    }
-                }));
-                return true;
+            console.log('Found authentication cookies:', {
+                client: clientCookie || 'not found',
+                clerk: clerkCookie || 'not found',
+                ltpa2: ltpa2Cookie || 'not found'
+            });
+            
+            if (!clientCookie && !clerkCookie && !ltpa2Cookie) {
+                console.log('=== No authentication cookies found ===');
+                return false;
             }
-
-            this.onLog('Authentication', authUrl, 'warning', JSON.stringify({ 
-                message: 'No auth cookies found',
-                availableCookies: cookies 
+            
+            // Store all tokens
+            if (clientCookie) this.token.client = clientCookie;
+            if (clerkCookie) this.token.clerk = clerkCookie;
+            if (ltpa2Cookie) this.token.ltpa2 = ltpa2Cookie;
+            
+            console.log('Stored tokens:', this.token);
+            
+            this.onLog('Authentication', authUrl, 'success', JSON.stringify({ 
+                cookies: {
+                    client: clientCookie,
+                    clerk: clerkCookie,
+                    ltpa2: ltpa2Cookie
+                }
             }));
-            return false;
+            return true;
 
         } catch (error) {
+            console.error('Authentication error:', error);
             this.onLog('Authentication', authUrl, 'error', JSON.stringify({ 
-                error: error.message 
+                error: error.message,
+                currentCookies: document.cookie
             }));
             throw new Error("Failed to retrieve auth cookies: " + error.message);
         }
     }
 
     async retrieveCSRFToken() {
-        console.log('Retrieving CSRF token...');
+        console.log('=== Starting CSRF Token Retrieval ===');
         const csrfUrl = '/itim/rest/systemusers/me';
         this.onLog('CSRF Token Request', csrfUrl, 'pending');
-        console.log("USING THIS:" + this.token.jsession + "            ::      " + this.token.ltpa2)
+        
         try {
-            // Construct cookie header from all available tokens
-            const cookieHeader = [this.token.jsession, this.token.ltpa2]
-                .filter(Boolean)
-                .join('; ');
+            // Get current cookies directly from browser
+            const currentCookies = document.cookie.split(';').map(c => c.trim());
+            console.log('Current browser cookies:', currentCookies);
             
-            console.log('!!!! Using cookie header:', cookieHeader);
+            // Look for specific cookies
+            const jsessionCookie = currentCookies.find(c => c.startsWith('JSESSIONID='));
+            const clientCookie = currentCookies.find(c => c.startsWith('_client_wat='));
+            const clerkCookie = currentCookies.find(c => c.startsWith('_clerk_db_jwt='));
+            const ltpa2Cookie = currentCookies.find(c => c.startsWith('LtpaToken2='));
+            
+            console.log('Found cookies in browser:', {
+                jsession: jsessionCookie || 'not found',
+                client: clientCookie || 'not found',
+                clerk: clerkCookie || 'not found',
+                ltpa2: ltpa2Cookie || 'not found'
+            });
+            
+            console.log('Stored tokens:', {
+                jsession: this.token.jsession || 'not set',
+                client: this.token.client || 'not set',
+                clerk: this.token.clerk || 'not set',
+                ltpa2: this.token.ltpa2 || 'not set'
+            });
+            
+            // Use current browser cookies instead of stored tokens
+            const cookieHeader = [
+                jsessionCookie,
+                clientCookie,
+                clerkCookie,
+                ltpa2Cookie
+            ].filter(Boolean).join('; ');
+            
+            console.log('Using current cookie header:', cookieHeader);
 
             const response = await fetch(csrfUrl, {
                 method: 'GET',
@@ -232,12 +273,11 @@ export class ISIMClient {
             return false;
 
         } catch (error) {
+            console.error('CSRF Token Request failed:', error);
             this.onLog('CSRF Token Request', csrfUrl, 'error', JSON.stringify({
                 error: error.message,
-                cookies: {
-                    jsession: this.token.jsession,
-                    ltpa2: this.token.ltpa2
-                }
+                currentCookies: document.cookie,
+                storedTokens: this.token
             }));
             throw new Error("Failed to get CSRF token: " + error.message);
         }
@@ -264,11 +304,11 @@ export class ISIMClient {
 
     async checkSessionValid() {
        console.log('Checking session validity...');
-        if (this.token.csrf && this.token.ltpa2 && this.token.jsession) {
+        if (this.token.csrf && this.token.client && this.token.clerk && this.token.jsession) {
             try {
                 const response = await fetch(this.baseURI + this.csrfPath, {
                     headers: {
-                        'Cookie': `${this.token.ltpa2}; ${this.token.jsession}`,
+                        'Cookie': `${this.token.client}; ${this.token.clerk}; ${this.token.jsession}`,
                         'Accept': 'application/json'
                     },
                     credentials: 'include'
@@ -331,7 +371,7 @@ export class ISIMClient {
             // Build headers with CSRF token
             const headers = {
                 'Accept': '*/*',
-                'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; '),
+                'Cookie': [this.token.jsession, this.token.client, this.token.clerk].filter(Boolean).join('; '),
                 'X-CSRF-Token': this.token.csrf
             };
 
@@ -378,7 +418,8 @@ export class ISIMClient {
                 error: error.message,
                 tokens: {
                     jsession: !!this.token.jsession,
-                    ltpa2: !!this.token.ltpa2,
+                    client: !!this.token.client,
+                    clerk: !!this.token.clerk,
                     csrf: !!this.token.csrf
                 }
             }));
@@ -451,7 +492,7 @@ export class ISIMClient {
         try {
             const headers = {
                 'Accept': '*/*',
-                'Cookie': [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; '),
+                'Cookie': [this.token.jsession, this.token.client, this.token.clerk].filter(Boolean).join('; '),
                 'X-CSRF-Token': this.token.csrf
             };
 
@@ -488,11 +529,11 @@ export class ISIMClient {
         
         try {
             // Ensure we have both cookies
-            if (!this.token.jsession || !this.token.ltpa2) {
+            if (!this.token.jsession || !this.token.client || !this.token.clerk) {
                 throw new Error('Missing required authentication tokens');
             }
 
-            const cookieHeader = [this.token.jsession, this.token.ltpa2].filter(Boolean).join('; ');
+            const cookieHeader = [this.token.jsession, this.token.client, this.token.clerk].filter(Boolean).join('; ');
             console.log('Using cookie header:', cookieHeader);
 
             const response = await fetch(url, {
@@ -524,7 +565,8 @@ export class ISIMClient {
                 error: error.message,
                 cookies: {
                     jsession: this.token.jsession,
-                    ltpa2: this.token.ltpa2
+                    client: this.token.client,
+                    clerk: this.token.clerk
                 }
             }));
             throw new Error(`Failed to get system users: ${error.message}`);
