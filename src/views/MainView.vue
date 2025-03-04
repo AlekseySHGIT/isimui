@@ -529,7 +529,7 @@ async function loadPeople() {
       return;
     }
 
-  //  const response = await isimClient.getPeople();
+    const response = await isimClient.getPeople();
     
     // Transform each person to include personId and flatten attributes
     people.value = response.map(transformPerson);

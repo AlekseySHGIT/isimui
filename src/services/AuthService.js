@@ -154,6 +154,10 @@ class AuthService {
 
       console.log('=== Logout Process Completed ===');
       console.log('Final cookies:', document.cookie);
+      
+      // Redirect to login page
+      window.location.href = '/login';
+      
       return true;
     } catch (error) {
       console.error('Error during logout:', error);
