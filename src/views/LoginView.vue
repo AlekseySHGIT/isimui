@@ -41,24 +41,16 @@
                     variant="outlined"
                     color="primary"
                   />
-                  <v-select
+                  <v-text-field
                     v-model="serverUrl"
-                    :items="[
-                      { title: 'Локальный сервер', value: LOCAL_SERVER_URL },
-                      { title: 'Удаленный сервер', value: REMOTE_SERVER_URL }
-                    ]"
-                    item-title="title"
-                    item-value="value"
-                    label="Сервер"
+                    label="IP адрес сервера"
+                    prepend-icon="mdi-server"
                     variant="outlined"
                     density="compact"
-                    hide-details
                     class="mb-3"
-                  ></v-select>
-                  
-                  <div v-if="serverUrl === REMOTE_SERVER_URL" class="text-caption text-grey-darken-1 mb-3">
-                    IP адрес: {{ REMOTE_SERVER_URL.replace('http://', '').split(':')[0] }}
-                  </div>
+                    :rules="[rules.required]"
+                    placeholder="192.168.1.204:9080"
+                  />
                 </v-form>
               </v-card-text>
               <v-card-actions class="pb-4 px-4">
@@ -95,35 +87,39 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/AuthService'
-import { LOCAL_SERVER_URL, REMOTE_SERVER_URL } from '../config'
 
 const router = useRouter()
 const form = ref(null)
 const username = ref('ITIM Manager')
-const password = ref('')
-const serverUrl = ref(LOCAL_SERVER_URL)
+const password = ref('1q@3e4r')
+const serverUrl = ref('http://192.168.1.204:9080')
 const loading = ref(false)
 const snackbar = ref(false)
 const errorMessage = ref('')
-
-const serverOptions = [
-  { title: 'Локальный сервер', value: LOCAL_SERVER_URL },
-  { title: 'Удаленный сервер', value: REMOTE_SERVER_URL }
-]
 
 const rules = {
   required: value => !!value || 'Обязательное поле'
 }
 
-const handleLogin = async () => {
+async function handleLogin() {
   if (!form.value?.validate()) return
 
+  // Clear existing LtpaToken2 cookie with all necessary attributes
+  document.cookie = 'LtpaToken2=; Path=/; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;'
+  document.cookie = 'LtpaToken2=; Path=/itim; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;'
   loading.value = true
   snackbar.value = false
   
   try {
-    await AuthService.login(username.value, password.value, serverUrl.value)
-    router.push('/ui')
+    const user = await AuthService.login(username.value, password.value)
+    console.log("ROUTING!!!!!!! TO UI")
+    console.log(user.tokens.csrf)
+    if(user.tokens.csrf != 'not-available'){
+      router.push('/ui')
+    } else {
+      errorMessage.value = 'Неверный логин или пароль'
+      snackbar.value = true
+    }
   } catch (error) {
     errorMessage.value = error.message
     snackbar.value = true

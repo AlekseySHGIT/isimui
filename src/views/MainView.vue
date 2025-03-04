@@ -542,9 +542,10 @@ async function loadPeople() {
   }
 }
 
-function handleLogout() {
-  AuthService.logout()
-  router.push('/')
+async function handleLogout() {
+  console.log('Handling logout click');
+  await AuthService.logout();
+  console.log('Logout completed');
 }
 
 // Get current user information
