@@ -85,22 +85,45 @@ export class AuthClient {
         this.onLog('Authentication', authUrl, 'pending');
         
         try {
-            // More thorough cookie clearing before authentication
+            // Define all possible cookie variations
             const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
+            const domains = ['', 'localhost', window.location.hostname];
             const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
             
-            cookiesToClear.forEach(cookieName => {
-                paths.forEach(path => {
-                    document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+            // Clear cookies with all possible combinations
+            cookiesToClear.forEach(name => {
+                domains.forEach(domain => {
+                    paths.forEach(path => {
+                        // Try different cookie deletion approaches
+                        try {
+                            // Approach 1: Basic expiration
+                            document.cookie = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; secure; samesite=strict`;
+                            
+                            // Approach 2: With domain
+                            if (domain) {
+                                document.cookie = `${name}=; domain=${domain}; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; secure; samesite=strict`;
+                            }
+                            
+                            // Approach 3: With max-age
+                            document.cookie = `${name}=; path=${path}; max-age=0; secure; samesite=strict`;
+                            
+                            // Approach 4: Overwrite with invalid value then expire
+                            document.cookie = `${name}=INVALID; path=${path}; secure; samesite=strict`;
+                            document.cookie = `${name}=INVALID; path=${path}; max-age=0; secure; samesite=strict`;
+                        } catch (cookieError) {
+                            console.warn(`Failed to clear cookie ${name} with path ${path}:`, cookieError);
+                        }
+                    });
                 });
             });
 
-            // Also clear any other cookies
-            document.cookie.split(';').forEach(cookie => {
-                const name = cookie.split('=')[0].trim();
-                document.cookie = `${name}=; Path=/; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-                document.cookie = `${name}=; Path=/itim; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-            });
+            // Use modern API if available
+            if (window.cookieStore) {
+                await Promise.all(cookiesToClear.map(name => window.cookieStore.delete(name)));
+            }
+
+            // Wait for cookies to be cleared
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             const formData = new URLSearchParams();
             formData.append('j_username', this.username);
@@ -110,7 +133,6 @@ export class AuthClient {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Cookie': this.token.jsession,
                     'Accept': '*/*',
                     'Cache-Control': 'no-cache, no-store, must-revalidate',
                     'Pragma': 'no-cache',

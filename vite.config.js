@@ -32,8 +32,14 @@ export default defineConfig({
 
             const setCookie = proxyRes.headers['set-cookie'];
             if (setCookie) {
-              // Forward the original Set-Cookie header
-              res.setHeader('Set-Cookie', setCookie);
+              // Forward the original Set-Cookie header with enhanced security attributes
+              const enhancedCookies = setCookie.map(cookie => {
+                if (!cookie.includes('SameSite=') && !cookie.includes('Secure')) {
+                  return `${cookie}; SameSite=Lax; Secure`;
+                }
+                return cookie;
+              });
+              res.setHeader('Set-Cookie', enhancedCookies);
               
               // Log the full cookie details
               setCookie.forEach((cookie, index) => {

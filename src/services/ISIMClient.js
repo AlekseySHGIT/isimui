@@ -85,57 +85,138 @@ export class ISIMClient {
 
     async clearLTPAToken() {
         console.log('=== Starting LTPA Token Clearing Process ===');
+        console.log('Initial cookies:', document.cookie);
         
         try {
-            // Attempt server-side logout
-            const logoutUrl = '/itim/restlogin/logout.jsp';
+            // First try the main console logout endpoint
+            const mainLogoutUrl = '/itim/console/main';
+            let logoutSuccess = false;
+            
             try {
-                const response = await fetch(logoutUrl, {
+                console.log('Attempting main console logout...');
+                const response = await fetch(mainLogoutUrl, {
                     method: 'GET',
                     credentials: 'include',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Accept': '*/*'
+                    }
                 });
-                console.log('Logout response:', response.status, response.ok);
+                
+                logoutSuccess = response.ok;
+                console.log(`Main logout attempt: Status ${response.status}, Success: ${logoutSuccess}`);
+                
+                // Set logout flag after attempt
+                document.cookie = 'consoleui_error_msg_key=LOGGED_OUT; path=/itim; secure; samesite=strict';
+                
+                // Wait briefly for server-side changes
+                await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (e) {
-                console.log('Logout request failed:', e);
+                console.log('Main logout attempt failed:', e);
+            }
+            
+            // Fallback to restlogin logout with retry mechanism
+            if (!logoutSuccess) {
+                const logoutUrl = '/itim/restlogin/logout.jsp';
+                let retryCount = 3;
+                
+                while (retryCount > 0 && !logoutSuccess) {
+                    try {
+                        const response = await fetch(logoutUrl, {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers: {
+                                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                                'Pragma': 'no-cache'
+                            }
+                        });
+                        logoutSuccess = response.ok;
+                        console.log(`Logout attempt ${4 - retryCount}: Status ${response.status}, Success: ${logoutSuccess}`);
+                    } catch (e) {
+                        console.log(`Logout attempt ${4 - retryCount} failed:`, e);
+                    }
+                    
+                    if (!logoutSuccess) {
+                        retryCount--;
+                        if (retryCount > 0) await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
             }
 
-            // Wait for server response
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Clear cookies using multiple methods
-            const cookiesToClear = ['LtpaToken2', 'JSESSIONID'];
-            const domains = ['localhost', '', null];
-            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', null];
+            // Define cookie configurations
+            const cookieConfig = [
+                { name: 'LtpaToken2', paths: ['/', '/itim'], secure: true, sameSite: 'strict' },
+                { name: 'JSESSIONID', paths: ['/', '/itim', '/itim/j_security_check'], secure: true, sameSite: 'lax' },
+                { name: '_client_wat', paths: ['/', '/itim'], secure: true, sameSite: 'strict' },
+                { name: '_clerk_db_jwt', paths: ['/', '/itim'], secure: true, sameSite: 'strict' }
+            ];
 
-            cookiesToClear.forEach(name => {
+            // Modern cookie deletion approach
+            const deleteCookie = async (name, path, options = {}) => {
+                const base = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
+                const attributes = [];
+                
+                if (options.secure) attributes.push('secure');
+                if (options.sameSite) attributes.push(`samesite=${options.sameSite}`);
+                
+                const cookieString = [base, ...attributes].join('; ');
+                document.cookie = cookieString;
+
+                // Try with domain variations
+                const domains = ['', window.location.hostname, `.${window.location.hostname}`];
                 domains.forEach(domain => {
-                    paths.forEach(path => {
-                        document.cookie = `${name}=; ${domain ? `domain=${domain}; ` : ''}${path ? `path=${path}; ` : ''}expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict`;
-                    });
+                    if (domain) {
+                        document.cookie = `${cookieString}; domain=${domain}`;
+                    }
                 });
-            });
+            };
 
-            // Attempt to overwrite with a fake value
-            document.cookie = 'LtpaToken2=INVALIDATED; path=/; expires=' + new Date(Date.now() + 10000).toUTCString();
-
-            // Use modern API if available
+            // Use modern Cookie API if available
             if (window.cookieStore) {
-                await Promise.all(cookiesToClear.map(name => window.cookieStore.delete(name)));
+                try {
+                    const cookies = await window.cookieStore.getAll();
+                    await Promise.all(
+                        cookies
+                            .filter(cookie => cookieConfig.some(config => config.name === cookie.name))
+                            .map(cookie => window.cookieStore.delete(cookie.name))
+                    );
+                } catch (e) {
+                    console.warn('CookieStore API failed:', e);
+                }
             }
 
-            // Final check
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const ltpaExists = document.cookie.split(';').some(c => c.trim().startsWith('LtpaToken2='));
+            // Fallback to traditional approach
+            await Promise.all(
+                cookieConfig.flatMap(config =>
+                    config.paths.map(path =>
+                        deleteCookie(config.name, path, {
+                            secure: config.secure,
+                            sameSite: config.sameSite
+                        })
+                    )
+                )
+            );
+
+            // Additional cleanup
+            sessionStorage.clear();
+
+            // Final verification
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const remainingCookies = document.cookie.split(';').map(c => c.trim());
+            const problematicCookies = remainingCookies.filter(cookie => 
+                cookieConfig.some(config => cookie.toLowerCase().startsWith(config.name.toLowerCase() + '='))
+            );
             
-            if (ltpaExists) {
-                console.warn('Warning: LTPA token still exists after clearing attempts');
+            if (problematicCookies.length > 0) {
+                console.warn('Warning: Some cookies could not be cleared:', problematicCookies);
                 return false;
             }
             
-            console.log('Successfully cleared LTPA token');
+            console.log('Successfully cleared all authentication cookies');
             return true;
         } catch (error) {
-            console.error('Error during LTPA token clearing:', error);
+            console.error('Error during cookie clearing:', error);
             return false;
         }
     }
@@ -147,7 +228,8 @@ export class ISIMClient {
         try {
             const response = await fetch(loginUrl, {
                 method: 'GET',
-                credentials: 'include'
+                credentials: 'include',
+                mode: 'no-cors'
             });
 
             // Get all headers for debugging
@@ -232,7 +314,7 @@ export class ISIMClient {
                 username: this.username,
                 passwordLength: this.password ? this.password.length : 0,
                 method: 'POST',
-                mode: 'no-cors'
+                mode: 'cors'
             });
 
             const requestHeaders = {
@@ -250,7 +332,7 @@ export class ISIMClient {
                 headers: requestHeaders,
                 body: formData.toString(),
                 credentials: 'include',
-                mode: 'no-cors'
+                mode: 'no-cors' // Use no-cors mode for legacy systems
             });
             
             console.log('=== Authentication Response Phase ===');
@@ -368,7 +450,8 @@ export class ISIMClient {
                     'Accept': 'application/json, text/plain, */*',
                     'Content-Type': 'application/json'
                 },
-                credentials: 'include'
+                credentials: 'include',
+                mode: 'no-cors'
             });
 
             let data;
@@ -386,7 +469,8 @@ export class ISIMClient {
                         'Accept': 'application/json, text/plain, */*',
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'include'
+                    credentials: 'include',
+                    mode: 'no-cors'
                 });
                 
                 if (response.ok) {
