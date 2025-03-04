@@ -87,57 +87,53 @@ export class ISIMClient {
         console.log('=== Starting LTPA Token Clearing Process ===');
         
         try {
-            // First try to invalidate the token from server side
-            console.log('Attempting to invalidate LTPA token from server...');
+            // Attempt server-side logout
             const logoutUrl = '/itim/restlogin/logout.jsp';
-            
             try {
                 const response = await fetch(logoutUrl, {
                     method: 'GET',
                     credentials: 'include',
                 });
-                console.log('Logout response:', {
-                    status: response.status,
-                    ok: response.ok
-                });
+                console.log('Logout response:', response.status, response.ok);
             } catch (e) {
-                console.log('Logout request failed, continuing with cookie clearing:', e);
+                console.log('Logout request failed:', e);
             }
 
-            // Wait a bit after server request
+            // Wait for server response
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Clear the cookie with exact matching attributes from browser
-            const clearingAttempts = [
-                // Most specific attempt matching the cookie we see in browser
-                'LtpaToken2=; path=/; domain=localhost; expires=Thu, 01 Jan 1970 00:00:01 GMT',
-                // Backup attempts with different variations
-                'LtpaToken2=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT',
-                'LtpaToken2=; path=/itim; domain=localhost; expires=Thu, 01 Jan 1970 00:00:01 GMT',
-                'LtpaToken2=; path=/itim; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-            ];
+            // Clear cookies using multiple methods
+            const cookiesToClear = ['LtpaToken2', 'JSESSIONID'];
+            const domains = ['localhost', '', null];
+            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', null];
 
-            // Try each clearing attempt
-            clearingAttempts.forEach(clearString => {
-                document.cookie = clearString;
-                console.log(`Attempted clear with: ${clearString}`);
+            cookiesToClear.forEach(name => {
+                domains.forEach(domain => {
+                    paths.forEach(path => {
+                        document.cookie = `${name}=; ${domain ? `domain=${domain}; ` : ''}${path ? `path=${path}; ` : ''}expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict`;
+                    });
+                });
             });
-            
-            // Wait for cookies to update
+
+            // Attempt to overwrite with a fake value
+            document.cookie = 'LtpaToken2=INVALIDATED; path=/; expires=' + new Date(Date.now() + 10000).toUTCString();
+
+            // Use modern API if available
+            if (window.cookieStore) {
+                await Promise.all(cookiesToClear.map(name => window.cookieStore.delete(name)));
+            }
+
+            // Final check
             await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Check if cookie still exists
-            const currentCookies = document.cookie.split(';').map(c => c.trim());
-            const ltpaExists = currentCookies.some(cookie => cookie.startsWith('LtpaToken2='));
+            const ltpaExists = document.cookie.split(';').some(c => c.trim().startsWith('LtpaToken2='));
             
             if (ltpaExists) {
-                console.warn('Warning: LTPA token still exists after all clearing attempts');
+                console.warn('Warning: LTPA token still exists after clearing attempts');
                 return false;
             }
             
             console.log('Successfully cleared LTPA token');
             return true;
-            
         } catch (error) {
             console.error('Error during LTPA token clearing:', error);
             return false;

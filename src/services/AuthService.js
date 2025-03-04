@@ -52,79 +52,57 @@ class AuthService {
   }
 
   async logout() {
+    console.log('=== Starting Logout Process ===');
+    console.log('Initial cookies:', document.cookie);
+    
     try {
-      // First try to invalidate the token from server side
+      // First try server-side logout
+      const logoutUrl = '/itim/restlogin/logout.jsp';
       try {
-        const logoutUrl = '/itim/restlogin/logout.jsp';
         const response = await fetch(logoutUrl, {
           method: 'GET',
           credentials: 'include',
         });
-        console.log('Server logout response:', response.status);
+        console.log('Logout response:', response.status, response.ok);
       } catch (e) {
-        console.warn('Server logout request failed:', e);
+        console.log('Logout request failed:', e);
       }
 
-      // Use modern cookie deletion API if available
-      if (window.cookieStore) {
-        try {
-          await window.cookieStore.delete('LtpaToken2');
-          await window.cookieStore.delete({
-            name: 'LtpaToken2',
-            domain: 'localhost',
-            path: '/'
-          });
-        } catch (e) {
-          console.warn('CookieStore API failed:', e);
-        }
-      }
-
-      // Fallback: try to delete via document.cookie
-      const cookieAttrs = [
-        'path=/;',
-        'domain=localhost;',
-        'expires=Thu, 01 Jan 1970 00:00:00 GMT;',
-        'max-age=-1;'
-      ];
+      // Wait for server response
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Try all combinations of attributes
-      for (let i = 0; i < 16; i++) {
-        let attrs = [];
-        if (i & 1) attrs.push(cookieAttrs[0]);
-        if (i & 2) attrs.push(cookieAttrs[1]);
-        if (i & 4) attrs.push(cookieAttrs[2]);
-        if (i & 8) attrs.push(cookieAttrs[3]);
+      // Get all current cookies and find the exact case of LtpaToken2
+      const currentCookies = document.cookie.split(';').map(c => c.trim());
+      const ltpaTokenCookie = currentCookies.find(c => c.toLowerCase().startsWith('ltpatoken2='));
+      
+      if (ltpaTokenCookie) {
+        // Extract the exact name
+        const exactName = ltpaTokenCookie.split('=')[0];
+        console.log('Found LtpaToken2 cookie with exact name:', exactName);
         
-        document.cookie = `LtpaToken2=;${attrs.join('')}`;
+        // Override with same case
+        document.cookie = `${exactName}=INVALIDATED; path=/; max-age=31536000`;
+        document.cookie = `${exactName}=INVALIDATED; path=/itim; max-age=31536000`;
+      } else {
+        // Fallback to both cases
+        document.cookie = 'LtpaToken2=INVALIDATED; path=/; max-age=31536000';
+        document.cookie = 'ltpaToken2=INVALIDATED; path=/; max-age=31536000';
+        document.cookie = 'LtpaToken2=INVALIDATED; path=/itim; max-age=31536000';
+        document.cookie = 'ltpaToken2=INVALIDATED; path=/itim; max-age=31536000';
       }
-
-      // Also try removing via header
-      if (document.location.protocol === 'https:') {
-        try {
-          await fetch('/itim/rest/logout', {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-              'Set-Cookie': 'LtpaToken2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure'
-            }
-          });
-        } catch (e) {
-          console.warn('Header-based deletion failed:', e);
-        }
-      }
-
-      // Clear storage and state
+      
+      console.log('Cookies after setting fake value:', document.cookie);
+      
+      // Clear storage
+      localStorage.removeItem('isim_auth_data');
       localStorage.removeItem('user');
-      sessionStorage.clear();
       this.isimClient = null;
       this.removeAuthHeader();
 
-      // Force a hard reload to ensure cookie is cleared
-      document.location.href = '/';
+      console.log('=== Logout Process Completed ===');
+      console.log('Final cookies:', document.cookie);
     } catch (error) {
       console.error('Error during logout:', error);
-      // Even if something fails, try to force reload
-      document.location.href = '/';
     }
   }
 
@@ -137,6 +115,7 @@ class AuthService {
   }
 
   isAuthenticated() {
+    
     const user = this.getCurrentUser();
     return !!user;
   }
