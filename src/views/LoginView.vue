@@ -101,7 +101,7 @@ const rules = {
   required: value => !!value || 'Обязательное поле'
 }
 
-const handleLogin = async () => {
+async function handleLogin() {
   if (!form.value?.validate()) return
 
   // Clear existing LtpaToken2 cookie with all necessary attributes
@@ -111,8 +111,15 @@ const handleLogin = async () => {
   snackbar.value = false
   
   try {
-    await AuthService.login(username.value, password.value)
-    router.push('/ui')
+    const user = await AuthService.login(username.value, password.value)
+    console.log("ROUTING!!!!!!! TO UI")
+    console.log(user.tokens.csrf)
+    if(user.tokens.csrf != 'not-available'){
+      router.push('/ui')
+    } else {
+      errorMessage.value = 'Неверный логин или пароль'
+      snackbar.value = true
+    }
   } catch (error) {
     errorMessage.value = error.message
     snackbar.value = true

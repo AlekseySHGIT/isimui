@@ -98,8 +98,7 @@ export class ISIMClient {
                 });
                 console.log('Logout response:', {
                     status: response.status,
-                    ok: response.ok,
-                    headers: Array.from(response.headers.entries())
+                    ok: response.ok
                 });
             } catch (e) {
                 console.log('Logout request failed, continuing with cookie clearing:', e);
@@ -108,36 +107,26 @@ export class ISIMClient {
             // Wait a bit after server request
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Now try to clear cookies on client side
-            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
-            const domains = ['localhost', '192.168.1.204', ''];
-            
-            console.log('Current cookies before clearing:', document.cookie);
-            
-            // Try different cookie clearing approaches
-            domains.forEach(domain => {
-                paths.forEach(path => {
-                    // Try with all combinations of attributes
-                    [
-                        `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`,
-                        `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Max-Age=0; Secure; HttpOnly;`,
-                        `LtpaToken2=; Path=${path}; ${domain ? `Domain=${domain};` : ''} Expires=Thu, 01 Jan 1970 00:00:01 GMT;`
-                    ].forEach(clearString => {
-                        document.cookie = clearString;
-                        console.log(`Attempted clear with: ${clearString}`);
-                    });
-                });
-            });
+            // Clear the cookie with exact matching attributes from browser
+            const clearingAttempts = [
+                // Most specific attempt matching the cookie we see in browser
+                'LtpaToken2=; path=/; domain=localhost; expires=Thu, 01 Jan 1970 00:00:01 GMT',
+                // Backup attempts with different variations
+                'LtpaToken2=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT',
+                'LtpaToken2=; path=/itim; domain=localhost; expires=Thu, 01 Jan 1970 00:00:01 GMT',
+                'LtpaToken2=; path=/itim; expires=Thu, 01 Jan 1970 00:00:01 GMT'
+            ];
 
-            // Also try clearing with minimal attributes
-            document.cookie = 'LtpaToken2=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/;';
-            document.cookie = 'LtpaToken2=; max-age=0; path=/;';
+            // Try each clearing attempt
+            clearingAttempts.forEach(clearString => {
+                document.cookie = clearString;
+                console.log(`Attempted clear with: ${clearString}`);
+            });
             
             // Wait for cookies to update
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Check final state
-            console.log('Cookies after clearing attempts:', document.cookie);
+            // Check if cookie still exists
             const currentCookies = document.cookie.split(';').map(c => c.trim());
             const ltpaExists = currentCookies.some(cookie => cookie.startsWith('LtpaToken2='));
             
