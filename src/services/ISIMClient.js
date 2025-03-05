@@ -31,11 +31,11 @@ export class ISIMClient {
             console.log('Starting authentication flow...');
             
             // Clear LTPA token before starting authentication and wait for confirmation
-            console.log('Clearing LTPA token before authentication...');
-            const ltpaCleared = await this.clearLTPAToken();
-            if (!ltpaCleared) {
-                console.warn('Warning: Could not confirm LTPA token was cleared');
-            }
+             console.log('Clearing LTPA token before authentication...');
+             const ltpaCleared = await this.clearLTPAToken();
+             if (!ltpaCleared) {
+                 console.warn('Warning: Could not confirm LTPA token was cleared');
+             }
             
             // 1. First get LTPA2 token - this establishes the main authentication
             const ltpa2Result = await this.retrieveLTPA2Cookie();
@@ -108,7 +108,7 @@ export class ISIMClient {
                 console.log(`Main logout attempt: Status ${response.status}, Success: ${logoutSuccess}`);
                 
                 // Set logout flag after attempt
-                document.cookie = 'consoleui_error_msg_key=LOGGED_OUT; path=/itim; secure; samesite=strict';
+             //   document.cookie = 'consoleui_error_msg_key=LOGGED_OUT; path=/itim; secure; samesite=strict';
                 
                 // Wait briefly for server-side changes
                 await new Promise(resolve => setTimeout(resolve, 1000));
@@ -144,15 +144,15 @@ export class ISIMClient {
                 }
             }
 
-            // Define cookie configurations
+            // Define cookie configurations with expanded paths and options
             const cookieConfig = [
-                { name: 'LtpaToken2', paths: ['/', '/itim'], secure: true, sameSite: 'strict' },
-                { name: 'JSESSIONID', paths: ['/', '/itim', '/itim/j_security_check'], secure: true, sameSite: 'lax' },
-                { name: '_client_wat', paths: ['/', '/itim'], secure: true, sameSite: 'strict' },
-                { name: '_clerk_db_jwt', paths: ['/', '/itim'], secure: true, sameSite: 'strict' }
+                { name: 'LtpaToken2', paths: ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', '/itim/rest', '/itim/console'], secure: true, sameSite: 'strict' },
+                { name: 'JSESSIONID', paths: ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', '/itim/rest', '/itim/console'], secure: true, sameSite: 'lax' },
+                { name: '_client_wat', paths: ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', '/itim/rest', '/itim/console'], secure: true, sameSite: 'strict' },
+                { name: '_clerk_db_jwt', paths: ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', '/itim/rest', '/itim/console'], secure: true, sameSite: 'strict' }
             ];
 
-            // Modern cookie deletion approach
+            // Enhanced cookie deletion approach
             const deleteCookie = async (name, path, options = {}) => {
                 const base = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT`;
                 const attributes = [];
@@ -161,15 +161,30 @@ export class ISIMClient {
                 if (options.sameSite) attributes.push(`samesite=${options.sameSite}`);
                 
                 const cookieString = [base, ...attributes].join('; ');
-                document.cookie = cookieString;
+                
+                // Try multiple deletion approaches
+                try {
+                    // Approach 1: Basic expiration
+                    document.cookie = cookieString;
+                    
+                    // Approach 2: With max-age
+                    document.cookie = `${name}=; path=${path}; max-age=0; ${attributes.join('; ')}`;
+                    
+                    // Approach 3: Overwrite then expire
+                    document.cookie = `${name}=INVALID; path=${path}; ${attributes.join('; ')}`;
+                    document.cookie = `${name}=INVALID; path=${path}; max-age=0; ${attributes.join('; ')}`;
 
-                // Try with domain variations
-                const domains = ['', window.location.hostname, `.${window.location.hostname}`];
-                domains.forEach(domain => {
-                    if (domain) {
-                        document.cookie = `${cookieString}; domain=${domain}`;
-                    }
-                });
+                    // Try with domain variations
+                    const domains = ['', 'localhost', window.location.hostname, `.${window.location.hostname}`];
+                    domains.forEach(domain => {
+                        if (domain) {
+                            document.cookie = `${cookieString}; domain=${domain}`;
+                            document.cookie = `${name}=; domain=${domain}; path=${path}; max-age=0; ${attributes.join('; ')}`;
+                        }
+                    });
+                } catch (e) {
+                    console.warn(`Failed to clear cookie ${name} with path ${path}:`, e);
+                }
             };
 
             // Use modern Cookie API if available
@@ -285,24 +300,23 @@ export class ISIMClient {
         console.log('Target URL:', authUrl);
         
         try {
-            // More thorough cookie clearing before authentication
-            const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
-            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
-            
-            console.log('=== Cookie Cleanup Phase ===');
-            console.log('Cookies to clear:', cookiesToClear);
-            console.log('Paths to clear from:', paths);
-            console.log('Cookies before clearing:', document.cookie);
-            
-            cookiesToClear.forEach(cookieName => {
-                paths.forEach(path => {
-                    const clearString = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
-                    document.cookie = clearString;
-                    console.log(`Clearing cookie: ${cookieName} from path: ${path}`);
-                });
-            });
+            // Add additional wait time before starting new authentication
+            await new Promise(resolve => setTimeout(resolve, 2500));
 
-            console.log('Cookies after clearing:', document.cookie);
+            // Verify no stale cookies exist and clear them if found
+            const initialCookies = document.cookie.split(';').map(c => c.trim());
+            const hasStaleAuthCookies = initialCookies.some(c => 
+                c.startsWith('_client_wat=') || 
+                c.startsWith('_clerk_db_jwt=') || 
+                c.startsWith('LtpaToken2=')
+            );
+
+            if (hasStaleAuthCookies) {
+                console.log('Found stale auth cookies, clearing them first...');
+                await this.clearLTPAToken();
+                // Additional wait after clearing
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
 
             console.log('=== Authentication Request Phase ===');
             const formData = new URLSearchParams();
@@ -954,7 +968,7 @@ export class ISIMClient {
 
     async getAllRoles() {
         console.log('Retrieving roles...');
-        const url = '/rest/roles';
+        const url = '/rest/roles/orgroles';
         this.onLog('Roles', url, 'pending');
         
         try {
@@ -962,12 +976,14 @@ export class ISIMClient {
                 rawPath: true,
                 method: 'GET'
             });
-            
+            console.log("ALL ROLES: " + response)
             this.onLog('Roles', url, 'success');
             // Check if response is an array directly
+            
             if (Array.isArray(response)) {
                 return response;
             }
+
             // Try different possible response structures
             return response._embedded?.roles || 
                    response.roles || 

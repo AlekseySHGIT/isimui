@@ -16,13 +16,27 @@ class AuthService {
     try {
       // More thorough cookie clearing before login
       const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
-      const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+      const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin', '/itim/rest', '/itim/console'];
+      const domains = ['', 'localhost', window.location.hostname, `.${window.location.hostname}`];
       
+      // Clear cookies with all possible combinations
       cookiesToClear.forEach(cookieName => {
         paths.forEach(path => {
-          document.cookie = `${cookieName}=; Path=${path}; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;`;
+          domains.forEach(domain => {
+            try {
+              document.cookie = `${cookieName}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; secure; samesite=strict`;
+              if (domain) {
+                document.cookie = `${cookieName}=; domain=${domain}; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; secure; samesite=strict`;
+              }
+            } catch (e) {
+              console.warn(`Failed to clear cookie ${cookieName}:`, e);
+            }
+          });
         });
       });
+      
+      // Wait for cookies to be cleared
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Create a new ISIMClient instance for this login attempt
       this.isimClient = new ISIMClient({
@@ -86,10 +100,10 @@ class AuthService {
         console.log(`First logout attempt: Status ${response.status}`);
         
         // Set logout flag after successful server-side logout
-        document.cookie = 'consoleui_error_msg_key=LOGGED_OUT; path=/itim; secure; samesite=strict';
+   //     document.cookie = 'consoleui_error_msg_key=LOGGED_OUT; path=/itim; secure; samesite=strict';
         
         // Wait briefly for server-side changes
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Second request to ensure complete logout and proper cookie handling
         // This handles the case where the server returns cookies with 1994 expiration date
@@ -144,7 +158,7 @@ class AuthService {
       }
 
       // Clear all authentication cookies using ISIMClient's method as backup
-      await this.isimClient?.clearLTPAToken();
+    //  await this.isimClient?.clearLTPAToken();
 
       // Additional cleanup
       sessionStorage.clear();

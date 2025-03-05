@@ -102,6 +102,7 @@ const rules = {
 }
 
 async function handleLogin() {
+
   if (!form.value?.validate()) return
 
   // Clear existing LtpaToken2 cookie with all necessary attributes

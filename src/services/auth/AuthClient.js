@@ -11,6 +11,34 @@ export class AuthClient {
         try {
             console.log('Starting authentication flow...');
             
+            // Clear all authentication cookies before starting
+            const cookiesToClear = ['LtpaToken2', 'JSESSIONID', '_client_wat', '_clerk_db_jwt'];
+            const domains = ['', 'localhost', window.location.hostname];
+            const paths = ['/', '/itim', '/itim/j_security_check', '/itim/restlogin'];
+            
+            cookiesToClear.forEach(name => {
+                domains.forEach(domain => {
+                    paths.forEach(path => {
+                        try {
+                            document.cookie = `${name}=; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; secure; samesite=strict`;
+                            if (domain) {
+                                document.cookie = `${name}=; domain=${domain}; path=${path}; expires=Thu, 01 Jan 1970 00:00:01 GMT; secure; samesite=strict`;
+                            }
+                        } catch (e) {
+                            console.warn(`Failed to clear cookie ${name}:`, e);
+                        }
+                    });
+                });
+            });
+
+            // Use modern API if available
+            if (window.cookieStore) {
+                await Promise.all(cookiesToClear.map(name => window.cookieStore.delete(name)));
+            }
+
+            // Wait for cookies to be cleared
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
             await this.retrieveLTPA2Cookie();
             console.log('LTPA2 token retrieved successfully');
             

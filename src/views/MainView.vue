@@ -576,9 +576,12 @@ onMounted(async () => {
   try {
     // First ensure we're connected
     await defaultClient.connect();
-    await loadRoleMapping(); // Load role mapping first
-    await loadPeople();
-    await loadServices();
+    console.log("START all loading!")
+await Promise.all([
+ //loadRoleMapping(),
+  loadPeople(),
+  loadServices()
+]); // Run all loading operations in parallel
   } catch (error) {
     console.error('Error loading initial data:', error);
   }
