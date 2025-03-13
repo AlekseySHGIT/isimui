@@ -1,14 +1,20 @@
 <template>
   <v-app>
-    <v-app-bar>
-      <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
-      <v-toolbar-title>ISIM UI</v-toolbar-title>
+    <v-app-bar elevation="3" class="px-2">
+      <v-app-bar-nav-icon @click="drawer = !drawer" color="primary"></v-app-bar-nav-icon>
+      <v-toolbar-title class="d-flex align-center">
+        <v-icon icon="mdi-shield-account" color="primary" class="mr-2"></v-icon>
+        <span class="font-weight-bold">ISIM</span>
+        <span class="font-weight-light ml-1">UI</span>
+      </v-toolbar-title>
       <v-spacer></v-spacer>
       <v-btn
         color="error"
         prepend-icon="mdi-logout"
         @click="handleLogout"
         title="Выйти"
+        variant="tonal"
+        class="ml-2"
       >
         Выйти
       </v-btn>
@@ -19,6 +25,8 @@
       :rail="rail"
       permanent
       :width="250"
+      elevation="3"
+      class="rounded-tr-lg rounded-br-lg"
     >
       <v-list>
         <v-list-item>
@@ -50,12 +58,16 @@
           value="people"
           active
           color="primary"
+          rounded="lg"
+          class="mb-1 mx-2"
         ></v-list-item>
         <v-list-item 
           prepend-icon="mdi-logout" 
           title="Выйти"
           color="error"
           @click="handleLogout"
+          rounded="lg"
+          class="mb-1 mx-2"
         ></v-list-item>
       </v-list>
 
@@ -67,6 +79,7 @@
             @click.stop="rail = !rail"
             :color="rail ? 'primary' : 'grey'"
             variant="tonal"
+            rounded="lg"
           >
             {{ rail ? 'Развернуть' : 'Свернуть' }}
           </v-btn>
@@ -75,13 +88,14 @@
     </v-navigation-drawer>
 
     <!-- Main Content -->
-    <v-main>
+    <v-main class="bg-grey-lighten-4">
       <v-container fluid class="pa-0">
-        <v-card height="100vh" elevation="0">
+        <v-card height="100vh" elevation="0" class="rounded-0">
           <v-toolbar
             color="blue-lighten-5"
             flat
             class="px-4 py-2 border-b"
+            elevation="1"
           >
             <v-toolbar-title class="text-h6 font-weight-medium">
               Пользователи
@@ -97,6 +111,7 @@
               class="mx-4 flex-grow-1"
               style="max-width: 400px"
               bg-color="white"
+              rounded="lg"
             ></v-text-field>
             <v-menu
               v-model="showColumnsMenu"
@@ -109,12 +124,13 @@
                   variant="outlined"
                   class="mx-2"
                   prepend-icon="mdi-account-details"
+                  rounded="lg"
                 >
                   Атрибуты пользователя ({{ selectedAttributes.length }})
                 </v-btn>
               </template>
               
-              <v-card min-width="300" class="pa-2">
+              <v-card min-width="300" class="pa-2 rounded-lg">
                 <v-card-title class="text-subtitle-1">Атрибуты пользователя</v-card-title>
                 <v-divider></v-divider>
                 <v-list density="compact">
@@ -147,12 +163,13 @@
                   variant="outlined"
                   class="mx-2"
                   prepend-icon="mdi-key-variant"
+                  rounded="lg"
                 >
                   Атрибуты уч. записей ({{ selectedAccountAttributes.length }})
                 </v-btn>
               </template>
               
-              <v-card min-width="300" class="pa-2">
+              <v-card min-width="300" class="pa-2 rounded-lg">
                 <v-card-title class="text-subtitle-1">Атрибуты учетных записей</v-card-title>
                 <v-divider></v-divider>
                 <v-list density="compact">
@@ -180,6 +197,7 @@
               variant="tonal"
               color="primary"
               size="large"
+              rounded="lg"
             >
               Обновить
             </v-btn>
@@ -198,9 +216,7 @@
               fixed-header
               density="comfortable"
               hover
-              height="calc(100vh - 140px)"
-              class="elevation-1 table-fixed-layout"
-              @update:options="handleTableOptionsUpdate"
+              class="elevation-2 rounded-lg"
             >
               <template #[`item`]="{ item }">
                 <PersonRow

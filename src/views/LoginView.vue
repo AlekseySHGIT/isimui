@@ -1,11 +1,11 @@
 <template>
   <v-app>
-    <v-main>
+    <v-main class="bg-light">
       <v-container fluid class="fill-height">
         <v-row align="center" justify="center">
           <v-col cols="12" sm="8" md="4">
-            <v-card class="elevation-12">
-              <v-toolbar color="primary" dark flat>
+            <v-card class="elevation-8 rounded-lg">
+              <v-toolbar color="primary" dark flat class="rounded-t-lg">
                 <v-toolbar-title class="d-flex align-center">
                   <div class="d-flex align-center">
                     <v-icon icon="mdi-shield-account" size="large" class="mr-2"></v-icon>
@@ -14,7 +14,7 @@
                   </div>
                 </v-toolbar-title>
               </v-toolbar>
-              <v-card-text class="pt-6">
+              <v-card-text class="pt-6 px-6">
               
                 <v-form ref="form">
                 
@@ -28,6 +28,8 @@
                     required
                     variant="outlined"
                     color="primary"
+                    class="mb-3"
+                    bg-color="grey-lighten-5"
                   />
                   <v-text-field
                     v-model="password"
@@ -40,6 +42,8 @@
                     @keyup.enter="handleLogin"
                     variant="outlined"
                     color="primary"
+                    class="mb-3"
+                    bg-color="grey-lighten-5"
                   />
                   <v-text-field
                     v-model="serverUrl"
@@ -47,13 +51,14 @@
                     prepend-icon="mdi-server"
                     variant="outlined"
                     density="compact"
-                    class="mb-3"
+                    class="mb-4"
                     :rules="[rules.required]"
                     placeholder="192.168.1.204:9080"
+                    bg-color="grey-lighten-5"
                   />
                 </v-form>
               </v-card-text>
-              <v-card-actions class="pb-4 px-4">
+              <v-card-actions class="pb-6 px-6">
                 <v-spacer />
                 <v-btn 
                   color="primary" 
@@ -63,6 +68,8 @@
                   size="large"
                   prepend-icon="mdi-login"
                   variant="elevated"
+                  class="px-6"
+                  elevation="2"
                 >
                   Войти
                 </v-btn>
@@ -77,6 +84,8 @@
       v-model="snackbar"
       color="error"
       timeout="3000"
+      location="top"
+      rounded="lg"
     >
       {{ errorMessage }}
     </v-snackbar>
@@ -142,12 +151,25 @@ onMounted(() => {
 }
 
 .v-card {
-  border-radius: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.v-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
 }
 
 .v-btn {
   text-transform: none;
   font-weight: 500;
   letter-spacing: 0.5px;
+  border-radius: 8px;
+}
+
+.v-text-field {
+  border-radius: 8px;
 }
 </style>
