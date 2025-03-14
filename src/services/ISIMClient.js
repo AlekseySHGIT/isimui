@@ -37,18 +37,7 @@ export class ISIMClient {
                  console.warn('Warning: Could not confirm LTPA token was cleared');
              }
             
-            // 1. First get JSESSION ID - this establishes the initial session
-            await this.retrieveJSessionCookie();
-            console.log('JSESSION result:', {
-                success: !!this.token.jsession,
-                jsession: this.token.jsession ? 'Found' : 'Not found',
-                value: this.token.jsession || 'Not set'
-            });
-            
-            // Wait for JSESSION to be properly set
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // 2. Then get LTPA2 token - this establishes the main authentication
+            // 1. First get LTPA2 token - this establishes the main authentication
             const ltpa2Result = await this.retrieveLTPA2Cookie();
             console.log('LTPA2 token result:', {
                 success: !!ltpa2Result,
@@ -57,14 +46,13 @@ export class ISIMClient {
                 ltpa2: this.token.ltpa2 ? 'Found' : 'Not found'
             });
             
-            // Critical: Add a longer wait after LTPA2 token retrieval to ensure cookies are fully processed
-            // This is the key fix for the first login attempt issue
-            console.log('Waiting for LTPA2 token to be fully processed...');
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            // Verify cookies are properly set before proceeding
-            const currentCookies = document.cookie.split(';').map(c => c.trim());
-            console.log('Cookies before CSRF retrieval:', currentCookies);
+            // 2. Then get JSESSION - this creates the session with the authenticated token
+            await this.retrieveJSessionCookie();
+            console.log('JSESSION result:', {
+                success: !!this.token.jsession,
+                jsession: this.token.jsession ? 'Found' : 'Not found',
+                value: this.token.jsession || 'Not set'
+            });
             
             // 3. Finally get CSRF token - this requires both previous tokens
             // But don't fail if it can't be retrieved
@@ -422,35 +410,15 @@ export class ISIMClient {
             console.error('Authentication error:', error);
             this.onLog('Authentication', authUrl, 'error', JSON.stringify({ 
                 error: error.message,
-                currentCookies: document.cookie,
-                storedTokens: this.token
+                currentCookies: document.cookie
             }));
             throw new Error("Failed to retrieve auth cookies: " + error.message);
         }
     }
 
-    getFullUrl(path) {
-        // Make sure path starts with a slash if not already
-        if (!path.startsWith('/')) {
-            path = '/' + path;
-        }
-        
-        // If path already includes /itim, don't add it again
-        if (path.startsWith('/itim/')) {
-            return path;
-        }
-        
-        // Otherwise, ensure we have the /itim prefix
-        if (path.startsWith('/itim')) {
-            return path;
-        } else {
-            return '/itim' + path;
-        }
-    }
-
     async retrieveCSRFToken() {
         console.log('=== Starting CSRF Token Retrieval ===');
-        const csrfUrl = this.getFullUrl('/rest/systemusers/me');
+        const csrfUrl = '/itim/rest/systemusers/me';
         this.onLog('CSRF Token Request', csrfUrl, 'pending');
         
         try {
@@ -471,32 +439,6 @@ export class ISIMClient {
                 ltpa2: ltpa2Cookie || 'not found'
             });
             
-            // Check if we have the required authentication cookies
-            if (!ltpa2Cookie && !clientCookie && !clerkCookie) {
-                console.warn('No authentication cookies found before CSRF request - this will likely fail');
-                this.onLog('CSRF Token Request', csrfUrl, 'warning', 'No authentication cookies found');
-                
-                // Wait a bit longer and check again - sometimes cookies take time to propagate
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Check cookies again after waiting
-                const retryCurrentCookies = document.cookie.split(';').map(c => c.trim());
-                const retryLtpa2Cookie = retryCurrentCookies.find(c => c.startsWith('LtpaToken2='));
-                const retryClientCookie = retryCurrentCookies.find(c => c.startsWith('_client_wat='));
-                const retryClerkCookie = retryCurrentCookies.find(c => c.startsWith('_clerk_db_jwt='));
-                
-                console.log('Cookies after waiting:', {
-                    ltpa2: retryLtpa2Cookie || 'still not found',
-                    client: retryClientCookie || 'still not found',
-                    clerk: retryClerkCookie || 'still not found'
-                });
-                
-                // Update cookie references if found after waiting
-                if (retryLtpa2Cookie) ltpa2Cookie = retryLtpa2Cookie;
-                if (retryClientCookie) clientCookie = retryClientCookie;
-                if (retryClerkCookie) clerkCookie = retryClerkCookie;
-            }
-            
             console.log('Stored tokens:', {
                 jsession: this.token.jsession || 'not set',
                 client: this.token.client || 'not set',
@@ -515,96 +457,42 @@ export class ISIMClient {
             console.log('Using current cookie header:', cookieHeader);
 
             // First try with GET
-            console.log(`Attempting GET request to ${csrfUrl}`);
-            let response;
+            let response = await fetch(csrfUrl, {
+                method: 'GET',
+                headers: {
+                    'Cookie': cookieHeader,
+                    'Accept': 'application/json, text/plain, */*',
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                mode: 'no-cors'
+            });
+
             let data;
-            let success = false;
-            
-            try {
+            if (response.ok) {
+                data = await response.json();
+                console.log('CSRF GET Response:', data);
+            } else {
+                console.log(`GET request failed with status ${response.status}, trying POST...`);
+                
+                // If GET fails, try POST as fallback
                 response = await fetch(csrfUrl, {
-                    method: 'GET',
+                    method: 'POST',
                     headers: {
                         'Cookie': cookieHeader,
                         'Accept': 'application/json, text/plain, */*',
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'include'
+                    credentials: 'include',
+                    mode: 'no-cors'
                 });
                 
-                console.log(`GET response status: ${response.status}`);
-                
                 if (response.ok) {
-                    try {
-                        data = await response.json();
-                        console.log('CSRF GET Response:', data);
-                        success = true;
-                    } catch (jsonError) {
-                        console.warn('Failed to parse GET response as JSON:', jsonError);
-                    }
-                }
-            } catch (getError) {
-                console.warn('GET request failed:', getError);
-            }
-
-            // If GET fails, try POST as fallback
-            if (!success) {
-                console.log(`GET request failed or returned invalid data, trying POST to ${csrfUrl}...`);
-                
-                try {
-                    response = await fetch(csrfUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Cookie': cookieHeader,
-                            'Accept': 'application/json, text/plain, */*',
-                            'Content-Type': 'application/json'
-                        },
-                        credentials: 'include'
-                    });
-                    
-                    console.log(`POST response status: ${response.status}`);
-                    
-                    if (response.ok) {
-                        try {
-                            data = await response.json();
-                            console.log('CSRF POST Response:', data);
-                            success = true;
-                        } catch (jsonError) {
-                            console.warn('Failed to parse POST response as JSON:', jsonError);
-                        }
-                    }
-                } catch (postError) {
-                    console.warn('POST fallback failed:', postError);
-                }
-            }
-            
-            // If both GET and POST failed, try one more time with no-cors mode
-            if (!success) {
-                console.log('Both GET and POST failed, trying one more time with no-cors mode');
-                
-                try {
-                    response = await fetch(csrfUrl, {
-                        method: 'GET',
-                        headers: {
-                            'Cookie': cookieHeader,
-                            'Accept': 'application/json, text/plain, */*'
-                        },
-                        credentials: 'include',
-                        mode: 'no-cors'
-                    });
-                    
-                    console.log('No-cors mode response type:', response.type);
-                    
-                    // no-cors doesn't allow reading the response, so we'll check for cookies instead
-                    const afterCookies = document.cookie.split(';').map(c => c.trim());
-                    const csrfCookie = afterCookies.find(c => c.toLowerCase().includes('csrf'));
-                    
-                    if (csrfCookie) {
-                        console.log('Found CSRF cookie after no-cors request:', csrfCookie);
-                        this.token.csrf = csrfCookie;
-                        success = true;
-                    }
-                } catch (noCorsError) {
-                    console.warn('No-cors mode request failed:', noCorsError);
+                    data = await response.json();
+                    console.log('CSRF POST Response:', data);
+                } else {
+                    console.log(`POST fallback failed with status ${response.status}`);
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
             }
             
@@ -620,9 +508,9 @@ export class ISIMClient {
                 }
                 
                 // Check in response headers as well (some servers put it there)
-                const csrfHeader = response.headers?.get('X-CSRF-Token') || 
-                                  response.headers?.get('x-csrf-token') || 
-                                  response.headers?.get('CSRFToken');
+                const csrfHeader = response.headers.get('X-CSRF-Token') || 
+                                  response.headers.get('x-csrf-token') || 
+                                  response.headers.get('CSRFToken');
                 
                 if (csrfHeader) {
                     this.token.csrf = csrfHeader;

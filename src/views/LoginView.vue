@@ -115,36 +115,34 @@
                       <div v-if="authLogs.length === 0" class="text-center pa-4 text-grey">
                         No authentication logs yet. Login to see the authentication flow.
                       </div>
-                      <div v-else class="auth-log-container">
-                        <v-timeline density="compact" align="start">
-                          <v-timeline-item
-                            v-for="(log, index) in sortedLogs"
-                            :key="index"
-                            :dot-color="getLogStatusColor(log.status)"
-                            :icon="getLogStatusIcon(log.status)"
-                            size="small"
-                          >
-                            <div class="d-flex align-start">
-                              <div>
-                                <div class="text-subtitle-2 font-weight-medium">{{ log.step }}</div>
-                                <div class="text-body-2">{{ log.message }}</div>
-                                <div v-if="log.details" class="log-details mt-1">
-                                  <v-btn
-                                    size="x-small"
-                                    variant="text"
-                                    density="compact"
-                                    @click="log.expanded = !log.expanded"
-                                  >
-                                    {{ log.expanded ? 'Hide Details' : 'Show Details' }}
-                                  </v-btn>
-                                  <pre v-if="log.expanded" class="log-code mt-1">{{ log.details }}</pre>
-                                </div>
-                                <div class="text-caption text-grey">{{ log.time }}</div>
+                      <v-timeline v-else density="compact" align="start" direction="reverse" class="auth-log-container">
+                        <v-timeline-item
+                          v-for="(log, index) in authLogs"
+                          :key="index"
+                          :dot-color="getLogStatusColor(log.status)"
+                          :icon="getLogStatusIcon(log.status)"
+                          size="small"
+                        >
+                          <div class="d-flex align-start">
+                            <div>
+                              <div class="text-subtitle-2 font-weight-medium">{{ log.step }}</div>
+                              <div class="text-body-2">{{ log.message }}</div>
+                              <div v-if="log.details" class="log-details mt-1">
+                                <v-btn
+                                  size="x-small"
+                                  variant="text"
+                                  density="compact"
+                                  @click="log.expanded = !log.expanded"
+                                >
+                                  {{ log.expanded ? 'Hide Details' : 'Show Details' }}
+                                </v-btn>
+                                <pre v-if="log.expanded" class="log-code mt-1">{{ log.details }}</pre>
                               </div>
+                              <div class="text-caption text-grey">{{ log.time }}</div>
                             </div>
-                          </v-timeline-item>
-                        </v-timeline>
-                      </div>
+                          </div>
+                        </v-timeline-item>
+                      </v-timeline>
                       <div class="text-center mt-2" v-if="authLogs.length > 0">
                         <v-btn size="small" color="error" variant="text" @click="clearLogs">
                           Clear Logs
@@ -173,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/AuthService'
 
@@ -195,16 +193,6 @@ const rules = {
   required: value => !!value || 'Обязательное поле'
 }
 
-// Computed property to sort logs by timestamp (most recent first)
-const sortedLogs = computed(() => {
-  return [...authLogs.value].sort((a, b) => {
-    // Convert time strings to Date objects for comparison
-    const timeA = new Date(`${new Date().toDateString()} ${a.time}`).getTime()
-    const timeB = new Date(`${new Date().toDateString()} ${b.time}`).getTime()
-    return timeB - timeA // Sort in descending order (newest first)
-  })
-})
-
 // Log helper functions
 function addLog(step, message, status = 'info', details = null) {
   authLogs.value.push({
@@ -213,8 +201,7 @@ function addLog(step, message, status = 'info', details = null) {
     status,
     details,
     time: new Date().toLocaleTimeString(),
-    expanded: false,
-    timestamp: Date.now() // Add timestamp for sorting
+    expanded: false
   })
 }
 
@@ -292,14 +279,22 @@ function stopCookieMonitoring() {
 }
 
 async function handleLogin() {
-  if (!username.value || !password.value || !serverUrl.value) {
-    errorMessage.value = 'Пожалуйста, заполните все поля'
-    snackbar.value = true
-    return
-  }
+  if (!form.value?.validate()) return
 
-  loading.value = true
+  // Clear logs and start fresh
+  clearLogs()
+  addLog('Login Started', `Attempting to login as ${username.value}`, 'info')
+  
+  // Start monitoring cookies
   startCookieMonitoring()
+  
+  // Clear existing LtpaToken2 cookie with all necessary attributes
+  document.cookie = 'LtpaToken2=; Path=/; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;'
+  document.cookie = 'LtpaToken2=; Path=/itim; Domain=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Secure; HttpOnly; SameSite=Strict;'
+  addLog('Cookie Clearing', 'Clearing existing authentication cookies', 'info')
+  
+  loading.value = true
+  snackbar.value = false
   
   try {
     // Override console.log to capture authentication logs
@@ -348,12 +343,6 @@ async function handleLogin() {
     loading.value = false
     stopCookieMonitoring()
   }
-}
-
-function handleLogout() {
-  AuthService.logout()
-  authLogs.value = []
-  router.push('/login')
 }
 
 onMounted(() => {
